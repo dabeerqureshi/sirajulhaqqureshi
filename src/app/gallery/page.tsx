@@ -7,7 +7,7 @@ import GalleryGrid from '@/components/gallery/GalleryGrid';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { mockGallery } from '@/lib/data/mockData';
-import { Image as ImageIcon, Lock, ShieldCheck } from 'lucide-react';
+import { Image as ImageIcon } from 'lucide-react';
 
 export default function GalleryPage() {
   const { language, t } = useLanguage();

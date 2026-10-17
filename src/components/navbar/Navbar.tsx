@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useLanguage } from '@/context/LanguageContext';
-import { BookOpen, Feather, Image as ImageIcon, Shield, Menu, X, Globe, UserCheck } from 'lucide-react';
+import { Shield, Menu, X, Globe } from 'lucide-react';
 
 export default function Navbar() {
   const { language, setLanguage, t } = useLanguage();
@@ -17,6 +17,7 @@ export default function Navbar() {
     { href: '/poetry', label: t('navPoetry') },
     { href: '/books', label: t('navBooks') },
     { href: '/gallery', label: t('navGallery') },
+    { href: '/videos', label: t('navVideos') },
   ];
 
   const toggleLanguage = () => {

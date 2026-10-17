@@ -40,6 +40,10 @@ export const translations: Translations = {
     en: 'Gallery',
     ur: 'تصویری البم'
   },
+  navVideos: {
+    en: 'Videos',
+    ur: 'ویڈیوز'
+  },
   navAdmin: {
     en: 'Admin Portal',
     ur: 'ایڈمن پورٹل'
@@ -105,6 +109,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const saved = localStorage.getItem('site_language') as Language;
     if (saved === 'en' || saved === 'ur') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- the saved language can only be read after hydration; updating state here avoids an SSR/client markup mismatch
       setLanguageState(saved);
       document.documentElement.dir = saved === 'ur' ? 'rtl' : 'ltr';
       document.documentElement.lang = saved;

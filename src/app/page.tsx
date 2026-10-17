@@ -10,7 +10,7 @@ import GalleryGrid from '@/components/gallery/GalleryGrid';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { mockIntro, mockBiography, mockPoetry, mockBooks, mockGallery } from '@/lib/data/mockData';
-import { Feather, BookOpen, Image as ImageIcon, ArrowRight, Shield, Sparkles } from 'lucide-react';
+import { Feather, BookOpen, ArrowRight, Sparkles } from 'lucide-react';
 
 export default function HomePage() {
   const { language, t } = useLanguage();
@@ -73,19 +73,19 @@ export default function HomePage() {
 
               {/* Portrait / Visual Card */}
               <div className="lg:col-span-5 flex justify-center">
-                <div className="relative w-full max-w-md rounded-3xl p-3 bg-gradient-to-tr from-amber-700/30 to-stone-800 border border-stone-700 shadow-2xl">
-                  <div className="aspect-4/5 rounded-2xl overflow-hidden relative shadow-inner bg-stone-950">
+                <div className="relative w-full max-w-md rounded-3xl p-3 bg-black border border-stone-800 shadow-2xl">
+                  <div className="aspect-4/5 rounded-2xl overflow-hidden relative shadow-inner bg-black">
                     <img
                       src={mockIntro.cover_image || ''}
                       alt="Siraj ul Haq Qureshi"
-                      className="w-full h-full object-cover object-center filter brightness-95 contrast-105"
+                      className="w-full h-full object-contain object-center filter brightness-95 contrast-105"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-transparent to-transparent"></div>
                     <div className="absolute bottom-5 inset-x-5 text-center">
                       <p className="font-serif text-amber-200 text-lg font-bold">
                         {language === 'ur' ? 'سراج الحق قریشی' : 'Siraj ul Haq Qureshi'}
                       </p>
-                      <p className="text-xs text-stone-300">1932 — 2018</p>
+                      <p className="text-xs text-stone-300">1940 - 2026</p>
                     </div>
                   </div>
                 </div>

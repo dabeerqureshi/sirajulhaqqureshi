@@ -1,12 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
-import { useLanguage } from '@/context/LanguageContext';
 import { mockAccessRequests, mockBooks, mockPoetry, mockGallery } from '@/lib/data/mockData';
-import { AccessRequest, BookItem, ContentItem, GalleryItem } from '@/types/database';
+import { AccessRequest, BookItem, ContentItem } from '@/types/database';
 import {
   Shield,
   Users,
@@ -16,17 +14,14 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Plus,
   Upload,
   Lock,
-  Sparkles,
   Save,
   Check,
   FileText
 } from 'lucide-react';
 
 export default function AdminPage() {
-  const { language } = useLanguage();
   const [activeTab, setActiveTab] = useState<'requests' | 'poetry' | 'books' | 'gallery'>('requests');
 
   // Local state initialized with mock data

@@ -1,8 +1,8 @@
 export type UserRole = 'admin' | 'approved_user' | 'user';
-export type Visibility = 'public' | 'restricted';
+export type Visibility = 'public' | 'restricted' | 'secret';
 export type ContentType = 'intro' | 'biography' | 'poetry' | 'article' | 'memory';
 export type RequestStatus = 'pending' | 'approved' | 'rejected';
-export type ResourceType = 'all' | 'gallery' | 'books' | 'poetry';
+export type ResourceType = 'all' | 'gallery' | 'books' | 'poetry' | 'video';
 
 export interface Profile {
   id: string;
@@ -33,6 +33,8 @@ export interface ContentItem {
   visibility: Visibility;
   published: boolean;
   sort_order: number;
+  is_encrypted?: boolean;
+  encryption_salt?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -53,6 +55,8 @@ export interface BookItem {
   pages_count?: number | null;
   published_year?: string | null;
   download_count: number;
+  is_encrypted?: boolean;
+  encryption_salt?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -68,6 +72,8 @@ export interface GalleryItem {
   visibility: Visibility;
   sort_order: number;
   taken_date?: string | null;
+  is_encrypted?: boolean;
+  encryption_salt?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -85,4 +91,24 @@ export interface AccessRequest {
   requested_at: string;
   reviewed_at?: string | null;
   reviewed_by?: string | null;
+}
+
+export interface VideoItem {
+  id: string;
+  title_en: string;
+  title_ur: string;
+  description_en?: string | null;
+  description_ur?: string | null;
+  video_path: string;
+  youtube_url?: string | null;
+  thumbnail_path?: string | null;
+  duration?: string | null;
+  category?: string;
+  visibility: Visibility;
+  published: boolean;
+  sort_order: number;
+  is_encrypted?: boolean;
+  encryption_salt?: string | null;
+  created_at: string;
+  updated_at: string;
 }
