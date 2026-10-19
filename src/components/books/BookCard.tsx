@@ -1,17 +1,17 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
 import { BookItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
-import { BookOpen, Download, Lock, Check, Calendar, FileText } from 'lucide-react';
+import { BookOpen, Download, Lock, Calendar, FileText, Eye } from 'lucide-react';
 
 interface BookCardProps {
   book: BookItem;
   onRequestAccess?: (title: string) => void;
+  onReadOnline?: (book: BookItem) => void;
 }
 
-export default function BookCard({ book, onRequestAccess }: BookCardProps) {
+export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCardProps) {
   const { language, t } = useLanguage();
   const isRestricted = book.visibility === 'restricted';
 
@@ -19,20 +19,31 @@ export default function BookCard({ book, onRequestAccess }: BookCardProps) {
     e.preventDefault();
     if (isRestricted) {
       if (onRequestAccess) onRequestAccess(book.title_en);
-    } else {
-      alert(`Downloading ${language === 'ur' ? book.title_ur : book.title_en}... (PDF)`);
+    } else if (book.file_path) {
+      const link = document.createElement('a');
+      link.href = book.file_path;
+      link.download = `${book.title_en}.pdf`;
+      link.click();
+    }
+  };
+
+  const handleRead = () => {
+    if (isRestricted) {
+      if (onRequestAccess) onRequestAccess(book.title_en);
+    } else if (onReadOnline) {
+      onReadOnline(book);
     }
   };
 
   return (
-    <div className="flex flex-col sm:flex-row bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm hover:shadow-md transition-all group">
+    <div className="flex flex-col sm:flex-row bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-lg transition-all group">
       {/* Book Cover */}
-      <div className="sm:w-48 h-64 sm:h-auto relative bg-gradient-to-br from-amber-950 to-stone-900 flex-shrink-0 flex items-center justify-center p-4">
+      <div className="sm:w-52 h-64 sm:h-auto relative bg-gradient-to-br from-amber-950 to-stone-900 shrink-0 flex items-center justify-center p-4">
         {book.cover_path ? (
           <img
             src={book.cover_path}
             alt={book.title_en}
-            className="w-full h-full object-cover rounded shadow-md group-hover:scale-105 transition-transform duration-300"
+            className="w-full h-full object-cover rounded-md shadow-md group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
           <div className="text-center text-amber-100 p-4 border border-amber-800/40 rounded flex flex-col items-center justify-center h-full">
@@ -55,7 +66,7 @@ export default function BookCard({ book, onRequestAccess }: BookCardProps) {
         <div>
           {/* Metadata badges */}
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-stone-100 text-stone-700">
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-medium bg-amber-50 text-amber-900 border border-amber-200">
               {book.category}
             </span>
             {book.published_year && (
@@ -94,7 +105,7 @@ export default function BookCard({ book, onRequestAccess }: BookCardProps) {
           {isRestricted ? (
             <button
               onClick={() => onRequestAccess && onRequestAccess(book.title_en)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 text-amber-300 hover:bg-stone-800 text-xs font-medium shadow-sm transition-all"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 text-amber-300 hover:bg-stone-800 text-xs font-medium shadow-xs transition-all"
             >
               <Lock className="w-3.5 h-3.5 text-amber-400" />
               <span>{t('requestAccess')}</span>
@@ -102,8 +113,16 @@ export default function BookCard({ book, onRequestAccess }: BookCardProps) {
           ) : (
             <div className="flex items-center gap-2">
               <button
+                onClick={handleRead}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-amber-300 text-xs font-semibold shadow-xs transition-all"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>{t('readOnline')}</span>
+              </button>
+
+              <button
                 onClick={handleDownload}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-800 text-white hover:bg-amber-900 text-xs font-medium shadow-sm transition-all"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-800 text-white hover:bg-amber-900 text-xs font-medium shadow-xs transition-all"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>{t('downloadPdf')}</span>

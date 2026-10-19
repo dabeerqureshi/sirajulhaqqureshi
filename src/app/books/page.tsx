@@ -5,8 +5,10 @@ import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
 import BookCard from '@/components/books/BookCard';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
+import BookReaderModal from '@/components/books/BookReaderModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { mockBooks } from '@/lib/data/mockData';
+import { BookItem } from '@/types/database';
 import { BookOpen, Search, DownloadCloud } from 'lucide-react';
 
 export default function BooksPage() {
@@ -14,10 +16,15 @@ export default function BooksPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedBookTitle, setSelectedBookTitle] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeReadingBook, setActiveReadingBook] = useState<BookItem | null>(null);
 
   const handleRequestAccess = (title: string) => {
     setSelectedBookTitle(title);
     setModalOpen(true);
+  };
+
+  const handleReadOnline = (book: BookItem) => {
+    setActiveReadingBook(book);
   };
 
   const filteredBooks = mockBooks.filter((b) => {
@@ -47,7 +54,7 @@ export default function BooksPage() {
             <p className={`text-stone-600 text-sm sm:text-base leading-relaxed ${language === 'ur' ? 'font-urdu' : ''}`}>
               {language === 'ur'
                 ? 'سراج الحق قریشی کی تمام مطبوعہ اور نایاب کتب، تحقیقی مقالات اور ادبی مضامین کا مکمل ریکارڈ۔ کتب کا آن لائن مطالعہ کریں یا پی ڈی ایف ڈاؤن لوڈ کریں۔'
-                : 'Explore the complete bibliography, treatises, and published works of Siraj ul Haq Qureshi. Download digital editions or request access to restricted manuscripts.'}
+                : 'Explore the complete bibliography, treatises, and published works of Siraj ul Haq Qureshi. Read entire books directly on the webpage or download PDF copies.'}
             </p>
 
             {/* Search Input */}
@@ -70,6 +77,7 @@ export default function BooksPage() {
                 key={book.id}
                 book={book}
                 onRequestAccess={handleRequestAccess}
+                onReadOnline={handleReadOnline}
               />
             ))}
           </div>
@@ -83,6 +91,12 @@ export default function BooksPage() {
         onClose={() => setModalOpen(false)}
         resourceTitle={selectedBookTitle}
         resourceType="Book / Publication"
+      />
+
+      <BookReaderModal
+        book={activeReadingBook}
+        isOpen={activeReadingBook !== null}
+        onClose={() => setActiveReadingBook(null)}
       />
     </div>
   );

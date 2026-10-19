@@ -8,18 +8,25 @@ import PoetryCard from '@/components/poetry/PoetryCard';
 import BookCard from '@/components/books/BookCard';
 import GalleryGrid from '@/components/gallery/GalleryGrid';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
+import BookReaderModal from '@/components/books/BookReaderModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { mockIntro, mockBiography, mockPoetry, mockBooks, mockGallery } from '@/lib/data/mockData';
+import { BookItem } from '@/types/database';
 import { Feather, BookOpen, Image as ImageIcon, ArrowRight, Shield, Sparkles } from 'lucide-react';
 
 export default function HomePage() {
   const { language, t } = useLanguage();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedItemTitle, setSelectedItemTitle] = useState('');
+  const [activeReadingBook, setActiveReadingBook] = useState<BookItem | null>(null);
 
   const handleRequestAccess = (title: string) => {
     setSelectedItemTitle(title);
     setModalOpen(true);
+  };
+
+  const handleReadOnline = (book: BookItem) => {
+    setActiveReadingBook(book);
   };
 
   return (
@@ -189,6 +196,7 @@ export default function HomePage() {
                 key={book.id}
                 book={book}
                 onRequestAccess={handleRequestAccess}
+                onReadOnline={handleReadOnline}
               />
             ))}
           </div>
@@ -229,6 +237,12 @@ export default function HomePage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         resourceTitle={selectedItemTitle}
+      />
+
+      <BookReaderModal
+        book={activeReadingBook}
+        isOpen={activeReadingBook !== null}
+        onClose={() => setActiveReadingBook(null)}
       />
     </div>
   );
