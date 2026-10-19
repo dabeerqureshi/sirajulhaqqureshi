@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useLanguage } from '@/context/LanguageContext';
-import { Feather, Heart } from 'lucide-react';
+import { Feather } from 'lucide-react';
 
 export default function Footer() {
   const { language, t } = useLanguage();

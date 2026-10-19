@@ -1,20 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React, { useState } from 'react';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
-import FileUploadDropzone from '@/components/admin/FileUploadDropzone';
-import { useLanguage } from '@/context/LanguageContext';
-import {
-  loginAdmin,
-  logoutAdmin,
-  getAdminSession,
-  isAdminAuthenticated,
-  ADMIN_CONFIG
-} from '@/lib/auth/adminAuth';
 import { mockAccessRequests, mockBooks, mockPoetry, mockGallery } from '@/lib/data/mockData';
-import { AccessRequest, BookItem, ContentItem, GalleryItem } from '@/types/database';
+import { AccessRequest, BookItem, ContentItem } from '@/types/database';
 import {
   Shield,
   ShieldCheck,
@@ -31,6 +21,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Upload,
+  Lock,
   Save,
   Check,
   AlertCircle,
@@ -39,18 +31,6 @@ import {
 } from 'lucide-react';
 
 export default function AdminPage() {
-  const { language } = useLanguage();
-
-  // Authentication State
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [authLoading, setAuthLoading] = useState<boolean>(true);
-  const [adminEmail, setAdminEmail] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [currentSessionEmail, setCurrentSessionEmail] = useState<string>('');
-
-  // Dashboard Tabs: 'requests' | 'poetry' | 'books' | 'gallery'
   const [activeTab, setActiveTab] = useState<'requests' | 'poetry' | 'books' | 'gallery'>('requests');
 
   // Live Database State (Initialized from data stores)

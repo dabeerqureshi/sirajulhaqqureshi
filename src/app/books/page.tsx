@@ -8,8 +8,7 @@ import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import BookReaderModal from '@/components/books/BookReaderModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { mockBooks } from '@/lib/data/mockData';
-import { BookItem } from '@/types/database';
-import { BookOpen, Search, DownloadCloud } from 'lucide-react';
+import { BookOpen, Search } from 'lucide-react';
 
 export default function BooksPage() {
   const { language, t } = useLanguage();

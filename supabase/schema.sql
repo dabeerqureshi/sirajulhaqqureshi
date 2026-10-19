@@ -214,12 +214,79 @@ create policy "Admins can delete access requests"
   using (public.is_admin());
 
 -- ==============================================================================
+-- ENCRYPTION SUPPORT ON EXISTING TABLES
+-- ==============================================================================
+-- is_encrypted: when true, the actual file/content is client-side encrypted
+--               and can only be decrypted with a secret password known to
+--               authorized users. The encryption key is NEVER stored server-side.
+-- encryption_salt: random salt used in PBKDF2 key derivation (stored in plain,
+--                  it is not secret — the password is the secret)
+alter table public.content add column if not exists is_encrypted boolean default false;
+alter table public.content add column if not exists encryption_salt text;
+
+alter table public.books add column if not exists is_encrypted boolean default false;
+alter table public.books add column if not exists encryption_salt text;
+
+alter table public.gallery add column if not exists is_encrypted boolean default false;
+alter table public.gallery add column if not exists encryption_salt text;
+
+-- YouTube embed support on videos (existing databases)
+alter table public.videos add column if not exists youtube_url text;
+
+-- ==============================================================================
+-- 6. VIDEOS TABLE
+-- ==============================================================================
+create table if not exists public.videos (
+  id uuid default uuid_generate_v4() primary key,
+  title_en text not null,
+  title_ur text not null,
+  description_en text,
+  description_ur text,
+  video_path text not null, -- path in public-assets or private-assets bucket
+  youtube_url text, -- optional YouTube URL; when set, the video plays inline via embed
+  thumbnail_path text,
+  duration text, -- e.g. "12:34"
+  category text default 'Lectures',
+  visibility text not null default 'public' check (visibility in ('public', 'restricted', 'secret')),
+  is_encrypted boolean default false,
+  encryption_salt text,
+  published boolean default true not null,
+  sort_order integer default 0,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.videos enable row level security;
+
+-- VIDEOS POLICIES
+create policy "Public can view published public videos"
+  on public.videos for select
+  using (
+    (published = true and visibility = 'public') or
+    (published = true and visibility = 'restricted' and public.is_approved()) or
+    (published = true and visibility = 'secret' and public.is_approved()) or
+    public.is_admin()
+  );
+
+create policy "Admins can do everything on videos"
+  on public.videos for all
+  using (public.is_admin());
+
+-- Add 'video' to access_requests resource_type check
+alter table public.access_requests drop constraint if exists access_requests_resource_type_check;
+alter table public.access_requests add constraint access_requests_resource_type_check
+  check (resource_type in ('all', 'gallery', 'books', 'poetry', 'video'));
+
+-- ==============================================================================
 -- STORAGE BUCKETS CONFIGURATION INSTRUCTIONS
 -- ==============================================================================
 -- In Supabase Dashboard -> Storage, create two buckets:
 -- 1. "public-assets" (Public: Checked)
---    Used for: Site icons, biography portraits, public book covers, public gallery photos.
+--    Used for: Site icons, biography portraits, public book covers, public gallery photos, public videos.
 --
 -- 2. "private-assets" (Public: Unchecked / Private)
---    Used for: Restricted family archives, private manuscripts, restricted books.
+--    Used for: Restricted family archives, private manuscripts, restricted books,
+--    restricted/secret videos, and any client-side encrypted ("secret") content.
 --    Files in this bucket are accessed only via Next.js API using Supabase signed URLs.
+--    "secret" (is_encrypted = true) files are additionally encrypted client-side with
+--    AES-GCM; the server never sees the encryption key.

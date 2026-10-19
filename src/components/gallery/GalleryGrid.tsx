@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { GalleryItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
-import { Lock, Eye, Calendar, Sparkles, Filter } from 'lucide-react';
+import { Lock, Eye, Calendar, Filter } from 'lucide-react';
 
 interface GalleryGridProps {
   items: GalleryItem[];

@@ -5,10 +5,9 @@ import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
 import { useLanguage } from '@/context/LanguageContext';
 import { mockBiography } from '@/lib/data/mockData';
-import { Feather, Award, BookOpen, Compass, Heart } from 'lucide-react';
 
 export default function AboutPage() {
-  const { language, t } = useLanguage();
+  const { language } = useLanguage();
 
   const milestones = [
     {

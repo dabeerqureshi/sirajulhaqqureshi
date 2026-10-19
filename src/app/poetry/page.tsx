@@ -7,7 +7,7 @@ import PoetryCard from '@/components/poetry/PoetryCard';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { mockPoetry } from '@/lib/data/mockData';
-import { Feather, Search, Sparkles } from 'lucide-react';
+import { Feather, Search } from 'lucide-react';
 
 export default function PoetryPage() {
   const { language, t } = useLanguage();
