@@ -3,18 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/client';
 import { useLanguage } from '@/context/LanguageContext';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import YouTubeEmbed from '@/components/videos/YouTubeEmbed';
 import { Play, Lock, Video, X, KeyRound } from 'lucide-react';
 import { decryptFile, fromBase64Url } from '@/lib/crypto';
 import type { VideoItem } from '@/types/database';
-
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 /** Extract the video ID from common YouTube URL formats (youtu.be, watch?v=, embed/). */
 function extractYouTubeId(url: string): string | null {
@@ -38,6 +33,12 @@ export default function VideosPage() {
 
   useEffect(() => {
     const load = async () => {
+      const supabase = createClient();
+      if (!supabase) {
+        // Supabase env vars not configured — render the empty state instead of crashing.
+        setLoading(false);
+        return;
+      }
       const { data, error } = await supabase
         .from('videos')
         .select('*')

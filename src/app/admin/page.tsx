@@ -1,18 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
+import FileUploadDropzone from '@/components/admin/FileUploadDropzone';
+import HamdManager from '@/app/admin/components/HamdManager';
 import { mockAccessRequests, mockBooks, mockPoetry, mockGallery } from '@/lib/data/mockData';
-import { AccessRequest, BookItem, ContentItem } from '@/types/database';
+import { AccessRequest, BookItem, ContentItem, GalleryItem } from '@/types/database';
+import { createClient } from '@/lib/supabase/client';
 import {
-  Shield,
   ShieldCheck,
   Lock,
-  Mail,
-  KeyRound,
-  Eye,
-  EyeOff,
   LogOut,
   Users,
   BookOpen,
@@ -21,17 +20,13 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Upload,
-  Lock,
   Save,
-  Check,
-  AlertCircle,
-  ArrowRight,
   FileText
 } from 'lucide-react';
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'requests' | 'poetry' | 'books' | 'gallery'>('requests');
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'requests' | 'poetry' | 'hamd' | 'books' | 'gallery'>('requests');
 
   // Live Database State (Initialized from data stores)
   const [requests, setRequests] = useState<AccessRequest[]>(mockAccessRequests);
@@ -47,38 +42,59 @@ export default function AdminPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Check persistent session on mount
+  // --- SUPABASE ADMIN SESSION GUARD ---
+  // The dashboard is only reachable with a live Supabase session whose profile
+  // role is 'admin'. Everyone else is redirected to /admin/login.
+  const [authLoading, setAuthLoading] = useState(true);
+  const [currentSessionEmail, setCurrentSessionEmail] = useState('');
+
   useEffect(() => {
-    const session = getAdminSession();
-    if (session) {
-      setIsAuthenticated(true);
-      setCurrentSessionEmail(session.email);
-    }
-    setAuthLoading(false);
-  }, []);
+    let cancelled = false;
 
-  // Handle Login Submission
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
+    (async () => {
+      const supabase = createClient();
+      if (!supabase) {
+        router.replace('/admin/login');
+        return;
+      }
 
-    const res = loginAdmin(adminEmail, adminPassword);
-    if (res.success) {
-      setIsAuthenticated(true);
-      setCurrentSessionEmail(adminEmail.trim().toLowerCase());
-      setAdminPassword('');
-      showToast('Welcome back, Administrator. Security token validated.');
-    } else {
-      setLoginError(res.message || 'Invalid credentials.');
-    }
-  };
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.replace('/admin/login');
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+
+      if (cancelled) return;
+
+      if (profile?.role !== 'admin') {
+        await supabase.auth.signOut();
+        router.replace('/admin/login');
+        return;
+      }
+
+      setCurrentSessionEmail(session.user.email || '');
+      setAuthLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   // Handle Logout
-  const handleLogout = () => {
-    logoutAdmin();
-    setIsAuthenticated(false);
-    setCurrentSessionEmail('');
-    showToast('Signed out of administrative console safely.');
+  const handleLogout = async () => {
+    const supabase = createClient();
+    if (supabase) await supabase.auth.signOut();
+    router.replace('/admin/login');
   };
 
   // --- ACCESS REQUESTS MANAGEMENT ---
@@ -229,108 +245,6 @@ export default function AdminPage() {
   }
 
   // ==============================================================================
-  // VIEW 1: SECURE ADMIN LOGIN SCREEN (If not logged in)
-  // ==============================================================================
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex flex-col bg-stone-950 text-stone-100">
-        <Navbar />
-
-        <div className="flex-1 flex items-center justify-center p-4 sm:p-6 py-16">
-          <div className="w-full max-w-md bg-stone-900/90 border border-stone-800 rounded-3xl p-8 sm:p-10 shadow-2xl backdrop-blur-xl space-y-6">
-            
-            {/* Header Icon */}
-            <div className="text-center space-y-3">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-700 to-amber-900 text-amber-200 flex items-center justify-center mx-auto shadow-lg shadow-amber-950/50 border border-amber-600/40">
-                <ShieldCheck className="w-9 h-9" />
-              </div>
-              <h2 className="text-2xl font-bold font-serif text-white">
-                Admin Console
-              </h2>
-              <p className="text-xs text-stone-400">
-                Restricted access for Siraj ul Haq Qureshi archive management
-              </p>
-            </div>
-
-            {/* Error Notification */}
-            {loginError && (
-              <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex items-center gap-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span>{loginError}</span>
-              </div>
-            )}
-
-            {/* Login Form */}
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-stone-400 mb-1.5">
-                  Admin Email
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-stone-500 absolute left-3.5 top-3.5" />
-                  <input
-                    type="email"
-                    required
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="qureshidabeer92@gmail.com"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-stone-950/70 border border-stone-800 text-white placeholder-stone-600 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-stone-400 mb-1.5">
-                  Security Password
-                </label>
-                <div className="relative">
-                  <KeyRound className="w-4 h-4 text-stone-500 absolute left-3.5 top-3.5" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-stone-950/70 border border-stone-800 text-white placeholder-stone-600 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-3 text-stone-500 hover:text-stone-300"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full py-3 rounded-xl bg-amber-700 hover:bg-amber-600 text-white font-semibold text-sm shadow-lg shadow-amber-950/50 transition-all flex items-center justify-center gap-2"
-                >
-                  <Lock className="w-4 h-4" />
-                  <span>Authenticate & Enter Portal</span>
-                </button>
-              </div>
-            </form>
-
-            <div className="pt-4 border-t border-stone-800/80 text-center">
-              <Link
-                href="/"
-                className="text-xs text-stone-400 hover:text-amber-400 transition-colors inline-flex items-center gap-1"
-              >
-                <span>&larr; Return to Public Digital Archive</span>
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <Footer />
-      </div>
-    );
-  }
-
-  // ==============================================================================
   // VIEW 2: AUTHENTICATED ADMIN DASHBOARD
   // ==============================================================================
   return (
@@ -356,7 +270,7 @@ export default function AdminPage() {
                   </span>
                 </div>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Logged in as: <strong className="text-stone-800 font-mono">{currentSessionEmail || ADMIN_CONFIG.email}</strong>
+                  Logged in as: <strong className="text-stone-800 font-mono">{currentSessionEmail}</strong>
                 </p>
               </div>
             </div>
@@ -486,6 +400,18 @@ export default function AdminPage() {
             >
               <Feather className="w-4 h-4" />
               <span>Publish Poetry (Text & Scans)</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('hamd')}
+              className={`flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab === 'hamd'
+                  ? 'border-amber-800 text-amber-900'
+                  : 'border-transparent text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>Hamd PDFs (حد)</span>
             </button>
 
             <button
@@ -868,6 +794,11 @@ export default function AdminPage() {
             )}
 
             {/* ======================================================== */}
+            {/* TAB: HAMD PDF MANAGER (UPLOAD POETRY HAMD PDFs)           */}
+            {/* ======================================================== */}
+            {activeTab === 'hamd' && <HamdManager onToast={showToast} />}
+
+            {/* ======================================================== */}
             {/* TAB 4: BOOKS UPLOADER (FULL PDF & COVER)                 */}
             {/* ======================================================== */}
             {activeTab === 'books' && (
@@ -971,6 +902,23 @@ export default function AdminPage() {
                       className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={bookCategory}
+                    onChange={(e) => setBookCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm"
+                  >
+                    <option value="Poetry">Poetry</option>
+                    <option value="Philosophy">Philosophy</option>
+                    <option value="Memoirs">Memoirs</option>
+                    <option value="Religious">Religious</option>
+                    <option value="Literature">Literature</option>
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

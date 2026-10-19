@@ -1,29 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createSessionClient } from '@/lib/supabase/server';
-
-/**
- * Returns true only for an authenticated session whose profile role is 'admin'.
- * Uploads/deletes use the service-role key (which bypasses RLS), so this check
- * is the gate that keeps the storage buckets admin-only.
- */
-async function isAuthorizedAdmin(): Promise<boolean> {
-  const supabase = await createSessionClient();
-  if (!supabase) return false;
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return false;
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  return profile?.role === 'admin';
-}
+import { isAuthorizedAdmin } from '@/lib/auth/session';
 
 /**
  * POST /api/upload

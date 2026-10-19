@@ -10,6 +10,7 @@ import GalleryGrid from '@/components/gallery/GalleryGrid';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import BookReaderModal from '@/components/books/BookReaderModal';
 import { useLanguage } from '@/context/LanguageContext';
+import { BookItem } from '@/types/database';
 import { mockIntro, mockBiography, mockPoetry, mockBooks, mockGallery } from '@/lib/data/mockData';
 import { Feather, BookOpen, ArrowRight, Sparkles } from 'lucide-react';
 

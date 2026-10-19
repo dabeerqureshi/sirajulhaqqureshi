@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/client';
 import { useLanguage } from '@/context/LanguageContext';
 import {
   Shield,
@@ -22,15 +22,23 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    // Created lazily so a missing env var surfaces as a friendly error instead
+    // of crashing the page (and the production build) at render time.
+    const supabase = createClient();
+    if (!supabase) {
+      setLoading(false);
+      setError(
+        language === 'ur'
+          ? 'سپرابیس کنفیگر نہیں کیا گیا۔ NEXT_PUBLIC_SUPABASE متغیرات چیک کریں۔'
+          : 'Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY).'
+      );
+      return;
+    }
 
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email,

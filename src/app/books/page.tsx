@@ -7,6 +7,7 @@ import BookCard from '@/components/books/BookCard';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import BookReaderModal from '@/components/books/BookReaderModal';
 import { useLanguage } from '@/context/LanguageContext';
+import { BookItem } from '@/types/database';
 import { mockBooks } from '@/lib/data/mockData';
 import { BookOpen, Search } from 'lucide-react';
 

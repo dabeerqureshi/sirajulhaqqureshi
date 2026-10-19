@@ -11,12 +11,16 @@ import { createClient } from '@supabase/supabase-js';
 export function createAdminClient() {
   const supabaseUrl = process.env.SUPABASE_SERVICE_ROLE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Newer Supabase projects issue SUPABASE_SECRET_KEY (sb_secret_...);
+  // older ones issue SUPABASE_SERVICE_ROLE_KEY. Both are server-only secrets.
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error(
-      'Missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL. '
-      + 'Set them in .env.local (server-side only).'
+      'Missing SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) or NEXT_PUBLIC_SUPABASE_URL. '
+      + 'Set them in .env.local / Vercel environment variables (server-side only).'
     );
   }
 

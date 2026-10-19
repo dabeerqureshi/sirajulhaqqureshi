@@ -30,6 +30,8 @@ export interface ContentItem {
   body_ur?: string | null;
   verses?: PoetryVerse[] | null;
   cover_image?: string | null;
+  /** Storage path of an attached PDF (used by type 'hamd' poetry PDFs). */
+  file_path?: string | null;
   visibility: Visibility;
   published: boolean;
   sort_order: number;

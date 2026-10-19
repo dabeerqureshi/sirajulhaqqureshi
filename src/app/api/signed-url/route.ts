@@ -1,31 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createSessionClient } from '@/lib/supabase/server';
+import { isAuthorizedViewer } from '@/lib/auth/session';
 
 const ALLOWED_BUCKETS = new Set(['public-assets', 'private-assets']);
-
-/**
- * Returns true when the caller has an authenticated Supabase session and their
- * profile role is 'admin' or 'approved_user' — i.e. the same visibility rules
- * the RLS policies enforce on the content tables.
- */
-async function isAuthorizedViewer(): Promise<boolean> {
-  const supabase = await createSessionClient();
-  if (!supabase) return false;
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return false;
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  return profile?.role === 'admin' || profile?.role === 'approved_user';
-}
 
 /**
  * GET /api/signed-url?bucket=...&path=...

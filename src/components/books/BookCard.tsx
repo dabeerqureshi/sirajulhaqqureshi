@@ -3,7 +3,7 @@
 import React from 'react';
 import { BookItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
-import { BookOpen, Download, Lock, Calendar, FileText } from 'lucide-react';
+import { BookOpen, Download, Lock, Calendar, FileText, Eye } from 'lucide-react';
 
 interface BookCardProps {
   book: BookItem;

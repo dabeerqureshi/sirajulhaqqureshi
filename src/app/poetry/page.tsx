@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
 import PoetryCard from '@/components/poetry/PoetryCard';
+import HamdSection from '@/components/poetry/HamdSection';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { mockPoetry } from '@/lib/data/mockData';
@@ -14,6 +15,8 @@ export default function PoetryPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTitle, setSelectedTitle] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  // 'verses' = classic poetry cards, 'hamd' = uploaded Hamd PDF reader section.
+  const [section, setSection] = useState<'verses' | 'hamd'>('verses');
 
   const handleRequestAccess = (title: string) => {
     setSelectedTitle(title);
@@ -49,21 +52,54 @@ export default function PoetryPage() {
                 : 'A curated anthology of poems, couplets, and philosophical ghazals by Siraj ul Haq Qureshi, presented with side-by-side English translations.'}
             </p>
 
-            {/* Search Input */}
-            <div className="relative max-w-md mx-auto pt-4">
-              <Search className="w-4 h-4 text-stone-400 absolute left-4 top-7" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={language === 'ur' ? 'نظم یا غزل تلاش کریں...' : 'Search poem by title...'}
-                className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white border border-stone-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30 shadow-xs"
-              />
+            {section === 'verses' && (
+              <div className="relative max-w-md mx-auto pt-4">
+                <Search className="w-4 h-4 text-stone-400 absolute left-4 top-7" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={language === 'ur' ? 'نظم یا غزل تلاش کریں...' : 'Search poem by title...'}
+                  className="w-full pl-11 pr-4 py-3 rounded-2xl bg-white border border-stone-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30 shadow-xs"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Section Switcher: Poetry Verses | Hamd */}
+          <div className="flex items-center justify-center pt-4 pb-10">
+            <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-white border border-stone-200 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setSection('verses')}
+                className={`px-5 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                  section === 'verses'
+                    ? 'bg-amber-800 text-white shadow-xs'
+                    : 'text-stone-500 hover:text-stone-800'
+                } ${language === 'ur' ? 'font-urdu' : ''}`}
+              >
+                {language === 'ur' ? 'غزلیات و نظمیں' : 'Poetry Verses'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSection('hamd')}
+                className={`px-5 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                  section === 'hamd'
+                    ? 'bg-amber-800 text-white shadow-xs'
+                    : 'text-stone-500 hover:text-stone-800'
+                } ${language === 'ur' ? 'font-urdu' : ''}`}
+              >
+                {language === 'ur' ? 'حمد' : 'Hamd'}
+              </button>
             </div>
           </div>
 
           {/* Poetry Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div
+            className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 ${
+              section === 'hamd' ? 'hidden' : ''
+            }`}
+          >
             {filteredPoetry.map((item) => (
               <PoetryCard
                 key={item.id}
@@ -72,6 +108,9 @@ export default function PoetryPage() {
               />
             ))}
           </div>
+
+          {/* Hamd Section — PDFs uploaded from the admin portal */}
+          {section === 'hamd' && <HamdSection />}
         </div>
       </main>
 
