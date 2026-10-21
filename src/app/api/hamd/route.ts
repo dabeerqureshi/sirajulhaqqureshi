@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { isAuthorizedAdmin } from '@/lib/auth/session';
+import { getAdminSession } from '@/lib/auth/session';
 import { HAMD_BUCKET, HAMD_FOLDER } from '@/lib/data/hamd';
 
 // Within-bucket path we accept for Hamd PDFs (only ever written by
@@ -28,7 +27,8 @@ function cleanText(value: unknown, max: number): string | null {
  */
 export async function POST(req: Request) {
   try {
-    if (!(await isAuthorizedAdmin())) {
+    const session = await getAdminSession();
+    if (session.status !== 'ok') {
       return NextResponse.json(
         { error: 'Admin authentication required' },
         { status: 403 }
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabase = createAdminClient();
+    const supabase = session.client;
 
     // Verify the PDF actually landed in storage before creating the record.
     const fileName = path.slice(`${HAMD_FOLDER}/`.length);
@@ -118,7 +118,8 @@ export async function POST(req: Request) {
  */
 export async function DELETE(req: Request) {
   try {
-    if (!(await isAuthorizedAdmin())) {
+    const session = await getAdminSession();
+    if (session.status !== 'ok') {
       return NextResponse.json(
         { error: 'Admin authentication required' },
         { status: 403 }
@@ -133,7 +134,7 @@ export async function DELETE(req: Request) {
       );
     }
 
-    const supabase = createAdminClient();
+    const supabase = session.client;
 
     const { data: row, error: fetchError } = await supabase
       .from('content')

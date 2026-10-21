@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { isAuthorizedAdmin } from '@/lib/auth/session';
+import { getAdminSession } from '@/lib/auth/session';
 import { HAMD_BUCKET, HAMD_FOLDER } from '@/lib/data/hamd';
 
 /**
@@ -27,10 +26,15 @@ function sanitizeFileName(raw: unknown): string | null {
  * *directly* to Supabase Storage. This bypasses the Vercel serverless request
  * body limit (4.5MB on the Hobby plan), allowing large poetry/Hamd PDF scans
  * while still requiring an authenticated admin session.
+ *
+ * The signed URL is issued with the admin's own session, so the storage RLS
+ * policies ("Admins write public-assets") must allow the insert — no
+ * service-role key is used.
  */
 export async function POST(req: Request) {
   try {
-    if (!(await isAuthorizedAdmin())) {
+    const session = await getAdminSession();
+    if (session.status !== 'ok') {
       return NextResponse.json(
         { error: 'Admin authentication required' },
         { status: 403 }
@@ -46,7 +50,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabase = createAdminClient();
+    const supabase = session.client;
     const path = `${HAMD_FOLDER}/${Date.now()}-${safe}`;
 
     const { data, error } = await supabase.storage

@@ -1,22 +1,22 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { isAuthorizedAdmin } from '@/lib/auth/session';
+import { getAdminSession } from '@/lib/auth/session';
 
 /**
  * POST /api/upload
- * Server-side file upload to Supabase Storage using the service role key.
+ * Server-side file upload to Supabase Storage using the caller's admin session.
  * Requires an authenticated admin session (verified via session cookies).
  * Expects multipart/form-data with fields:
  *   - file: the file to upload
  *   - bucket: target bucket ("public-assets" or "private-assets")
  *   - path: destination path within the bucket
  *
- * Only authenticated admins should call this. The caller is responsible for
- * verifying the session (this route trusts the admin client / service role).
+ * Only authenticated admins should call this. The upload runs with the admin's
+ * own JWT, so the storage RLS policies decide whether the write is allowed.
  */
 export async function POST(req: Request) {
   try {
-    if (!(await isAuthorizedAdmin())) {
+    const session = await getAdminSession();
+    if (session.status !== 'ok') {
       return NextResponse.json(
         { error: 'Admin authentication required' },
         { status: 403 }
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const supabase = createAdminClient();
+    const supabase = session.client;
     const arrayBuffer = await file.arrayBuffer();
     const contentType = file.type || 'application/octet-stream';
 
@@ -73,7 +73,8 @@ export async function POST(req: Request) {
  */
 export async function DELETE(req: Request) {
   try {
-    if (!(await isAuthorizedAdmin())) {
+    const session = await getAdminSession();
+    if (session.status !== 'ok') {
       return NextResponse.json(
         { error: 'Admin authentication required' },
         { status: 403 }
@@ -88,7 +89,7 @@ export async function DELETE(req: Request) {
       );
     }
 
-    const supabase = createAdminClient();
+    const supabase = session.client;
     const { error } = await supabase.storage.from(bucket).remove([path]);
 
     if (error) {

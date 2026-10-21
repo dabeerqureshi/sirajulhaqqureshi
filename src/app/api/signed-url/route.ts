@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { isAuthorizedViewer } from '@/lib/auth/session';
+import { getViewerSession } from '@/lib/auth/session';
 
 const ALLOWED_BUCKETS = new Set(['public-assets', 'private-assets']);
 
@@ -10,6 +9,10 @@ const ALLOWED_BUCKETS = new Set(['public-assets', 'private-assets']);
  *   - "public-assets" is publicly readable, so no session is required.
  *   - "private-assets" requires an authenticated, approved (or admin) user;
  *     the profile role check mirrors the RLS policies on the content tables.
+ *
+ * The signed URL is created with the caller's own session so that the storage
+ * RLS policies decide whether the object may be read — no service-role key is
+ * used. For anonymous callers the session client simply carries the anon role.
  *
  * Query params:
  *   bucket - storage bucket name (public-assets | private-assets)
@@ -41,14 +44,27 @@ export async function GET(req: Request) {
       );
     }
 
-    if (bucket === 'private-assets' && !(await isAuthorizedViewer())) {
+    const session = await getViewerSession();
+    if (session.status === 'not_configured' || !session.client) {
       return NextResponse.json(
-        { error: 'Authentication required for private assets' },
-        { status: 401 }
+        { error: 'Supabase is not configured' },
+        { status: 500 }
       );
     }
 
-    const supabase = createAdminClient();
+    if (bucket === 'private-assets') {
+      const authorized =
+        session.status === 'ok' &&
+        (session.role === 'admin' || session.role === 'approved_user');
+      if (!authorized) {
+        return NextResponse.json(
+          { error: 'Authentication required for private assets' },
+          { status: 401 }
+        );
+      }
+    }
+
+    const supabase = session.client;
     const { data, error } = await supabase.storage
       .from(bucket)
       .createSignedUrl(path, expiresIn);
