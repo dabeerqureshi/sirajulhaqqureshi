@@ -42,7 +42,16 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
       </div>
 
       {/* Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {filteredItems.length === 0 ? (
+        <div className="p-12 text-center rounded-2xl border border-stone-200 bg-white/80 shadow-xs max-w-md mx-auto">
+          <p className={`text-stone-500 text-sm ${language === 'ur' ? 'font-urdu' : ''}`}>
+            {language === 'ur'
+              ? 'ابھی تک کوئی تصویری دستاویزات شامل نہیں کی گئیں۔'
+              : 'No archival photographs have been published yet.'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredItems.map((item) => {
           const isRestricted = item.visibility === 'restricted';
 
@@ -130,7 +139,8 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Lightbox Modal for Public Photos */}
       {activePhoto && (

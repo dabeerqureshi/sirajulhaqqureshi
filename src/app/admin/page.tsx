@@ -6,7 +6,6 @@ import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
 import FileUploadDropzone from '@/components/admin/FileUploadDropzone';
 import HamdManager from '@/app/admin/components/HamdManager';
-import { mockGallery } from '@/lib/data/mockData';
 import { AccessRequest, BookItem, ContentItem, GalleryItem, VideoItem } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -344,35 +343,22 @@ export default function AdminPage() {
     }
   };
 
-  // Seed 25 Archival Photos to Supabase
-  const handleSeedArchivalPhotos = async () => {
+  // Clear all photos from Supabase gallery
+  const handleClearAllPhotos = async () => {
+    if (!confirm('Are you sure you want to delete all photos from the database? This cannot be undone.')) return;
     const supabase = createClient();
     if (!supabase) return;
 
     setSaving(true);
     try {
-      const photosToInsert = mockGallery.map((p, idx) => ({
-        title_en: p.title_en,
-        title_ur: p.title_ur,
-        description_en: p.description_en,
-        description_ur: p.description_ur,
-        category: p.category,
-        file_path: p.file_path,
-        visibility: p.visibility,
-        sort_order: idx + 1,
-        taken_date: p.taken_date || null,
-      }));
-
-      const { data, error } = await supabase
-        .from('gallery')
-        .insert(photosToInsert)
-        .select();
-
+      const ids = galleryList.map((g) => g.id);
+      if (ids.length === 0) return;
+      const { error } = await supabase.from('gallery').delete().in('id', ids);
       if (error) throw error;
-      if (data) setGalleryList(data);
-      showToast(`Successfully populated ${data?.length || 25} archival photos in Supabase!`);
+      setGalleryList([]);
+      showToast('All photos deleted from database.');
     } catch (err) {
-      showToast(`Seed failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      showToast(`Error deleting photos: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setSaving(false);
     }
@@ -1203,18 +1189,6 @@ export default function AdminPage() {
                         Upload images or link local archival files into the Supabase <code className="text-amber-800 font-mono">public.gallery</code> table.
                       </p>
                     </div>
-
-                    {galleryList.length === 0 && (
-                      <button
-                        type="button"
-                        onClick={handleSeedArchivalPhotos}
-                        disabled={saving}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold transition-all shadow-xs"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-amber-800" />
-                        <span>Seed 25 Archival Photos to Database</span>
-                      </button>
-                    )}
                   </div>
 
                   <FileUploadDropzone
@@ -1350,22 +1324,22 @@ export default function AdminPage() {
                     <h4 className="text-base font-bold text-stone-800 font-serif">
                       Current Gallery Photographs in Database ({galleryList.length})
                     </h4>
-                    {galleryList.length === 0 && (
+                    {galleryList.length > 0 && (
                       <button
                         type="button"
-                        onClick={handleSeedArchivalPhotos}
+                        onClick={handleClearAllPhotos}
                         disabled={saving}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-800 hover:bg-amber-900 text-white text-xs font-semibold shadow-xs"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs"
                       >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Seed 25 Archival Photos</span>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete All Photos</span>
                       </button>
                     )}
                   </div>
 
                   {galleryList.length === 0 ? (
                     <div className="p-8 text-center bg-stone-50 rounded-2xl border border-stone-200 text-stone-500 text-sm">
-                      No photos saved in database yet. Click the button above to seed all 25 historical Siraj ul Haq Qureshi photographs into Supabase!
+                      No photos in database. Use the form above to upload new photographs to the archive!
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">

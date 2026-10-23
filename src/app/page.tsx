@@ -11,7 +11,7 @@ import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import BookReaderModal from '@/components/books/BookReaderModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { BookItem, ContentItem, GalleryItem } from '@/types/database';
-import { mockIntro, mockBiography, mockGallery } from '@/lib/data/mockData';
+import { mockIntro, mockBiography } from '@/lib/data/mockData';
 import { createClient } from '@/lib/supabase/client';
 import { Feather, ArrowRight, Sparkles, ScrollText } from 'lucide-react';
 
@@ -23,7 +23,7 @@ export default function HomePage() {
 
   const [poetry, setPoetry] = useState<ContentItem[]>([]);
   const [books, setBooks] = useState<BookItem[]>([]);
-  const [gallery, setGallery] = useState<GalleryItem[]>(mockGallery.slice(0, 3));
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -174,10 +174,10 @@ export default function HomePage() {
               <div className="relative h-72 sm:h-80 rounded-2xl overflow-hidden border border-stone-800 bg-stone-950 flex items-center justify-center p-2 shadow-md">
                 <div
                   className="absolute inset-0 bg-cover bg-center filter blur-md opacity-35 scale-125"
-                  style={{ backgroundImage: `url(${mockBiography.cover_image || '/gallery/siraj-04.jpg'})` }}
+                  style={{ backgroundImage: `url(${mockBiography.cover_image || '/gallery/siraj-profile.jpg'})` }}
                 />
                 <img
-                  src={mockBiography.cover_image || '/gallery/siraj-04.jpg'}
+                  src={mockBiography.cover_image || '/gallery/siraj-profile.jpg'}
                   alt="Siraj ul Haq Qureshi Formal Portrait"
                   className="relative z-10 max-h-full max-w-full object-contain rounded-lg"
                 />
@@ -279,32 +279,34 @@ export default function HomePage() {
         )}
 
         {/* GALLERY HIGHLIGHTS */}
-        <section className="py-20 bg-stone-900 text-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 gap-4">
-              <div>
-                <span className="text-xs uppercase tracking-widest text-amber-400 font-bold">
-                  {language === 'ur' ? 'تصویری یادداشتیں' : 'Visual Legacy'}
-                </span>
-                <h2 className={`text-2xl sm:text-3xl font-bold text-white mt-1 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
-                  {t('photoArchives')}
-                </h2>
+        {gallery.length > 0 && (
+          <section className="py-20 bg-stone-900 text-white">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 gap-4">
+                <div>
+                  <span className="text-xs uppercase tracking-widest text-amber-400 font-bold">
+                    {language === 'ur' ? 'تصویری یادداشتیں' : 'Visual Legacy'}
+                  </span>
+                  <h2 className={`text-2xl sm:text-3xl font-bold text-white mt-1 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
+                    {t('photoArchives')}
+                  </h2>
+                </div>
+                <Link
+                  href="/gallery"
+                  className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-amber-400 hover:text-amber-300"
+                >
+                  <span>{t('viewAll')}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
               </div>
-              <Link
-                href="/gallery"
-                className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-amber-400 hover:text-amber-300"
-              >
-                <span>{t('viewAll')}</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
 
-            <GalleryGrid
-              items={gallery}
-              onRequestAccess={handleRequestAccess}
-            />
-          </div>
-        </section>
+              <GalleryGrid
+                items={gallery}
+                onRequestAccess={handleRequestAccess}
+              />
+            </div>
+          </section>
+        )}
       </main>
 
       <Footer />
