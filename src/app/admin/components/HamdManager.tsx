@@ -9,6 +9,10 @@ import {
   RefreshCw,
   Trash2,
   UploadCloud,
+  Pencil,
+  X,
+  Save,
+  Loader2,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getHamdItems, hamdDownloadUrl, hamdFileUrl } from '@/lib/data/hamd';
@@ -21,12 +25,6 @@ interface Props {
   onToast?: (message: string) => void;
 }
 
-/**
- * Admin tab for managing Hamd poetry PDFs. Upload flow: signed upload URL
- * (admin API) -> direct browser upload to Supabase Storage -> metadata row in
- * the `content` table (type 'hamd'). The signed-URL hop keeps large PDFs out
- * of Vercel's serverless request body limit.
- */
 export default function HamdManager({ onToast }: Props) {
   const { language } = useLanguage();
 
@@ -46,9 +44,11 @@ export default function HamdManager({ onToast }: Props) {
 
   const [reading, setReading] = useState<ContentItem | null>(null);
 
+  // Edit State
+  const [editingHamd, setEditingHamd] = useState<ContentItem | null>(null);
+  const [updatingHamd, setUpdatingHamd] = useState(false);
+
   const refresh = useCallback(async () => {
-    // State updates happen only after the network call resolves, so the effect
-    // body never sets state synchronously.
     const { items: rows, error } = await getHamdItems();
     setListError(error);
     setItems(rows);
@@ -56,7 +56,6 @@ export default function HamdManager({ onToast }: Props) {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- getHamdItems() is a network call; every setState in `refresh` runs only after its promise resolves, so there is no cascading synchronous render
     refresh();
   }, [refresh]);
 
@@ -101,7 +100,6 @@ export default function HamdManager({ onToast }: Props) {
 
     setSubmitting(true);
     try {
-      // 1) Ask the admin API for a one-time signed upload URL.
       const urlRes = await fetch('/api/hamd/upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,7 +110,6 @@ export default function HamdManager({ onToast }: Props) {
         throw new Error(urlJson.error || 'Could not prepare the upload.');
       }
 
-      // 2) Upload straight to Supabase Storage from the browser.
       const supabase = createClient();
       if (!supabase) {
         throw new Error('Supabase is not configured on this deployment.');
@@ -125,7 +122,6 @@ export default function HamdManager({ onToast }: Props) {
         });
       if (uploadError) throw new Error(uploadError.message);
 
-      // 3) Persist the metadata row.
       const saveRes = await fetch('/api/hamd', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,6 +149,56 @@ export default function HamdManager({ onToast }: Props) {
       setSubmitError(err instanceof Error ? err.message : 'Upload failed.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSaveEditHamd = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingHamd) return;
+
+    setUpdatingHamd(true);
+    const form = new FormData(e.currentTarget);
+    const updatedTitleEn = (form.get('title_en') as string).trim();
+    const updatedTitleUr = (form.get('title_ur') as string).trim();
+    const updatedSubEn = (form.get('subtitle_en') as string).trim();
+    const updatedSubUr = (form.get('subtitle_ur') as string).trim();
+
+    try {
+      const res = await fetch('/api/hamd', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingHamd.id,
+          title_en: updatedTitleEn,
+          title_ur: updatedTitleUr,
+          subtitle_en: updatedSubEn,
+          subtitle_ur: updatedSubUr,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Update failed.');
+
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === editingHamd.id
+            ? {
+                ...item,
+                title_en: updatedTitleEn,
+                title_ur: updatedTitleUr,
+                subtitle_en: updatedSubEn,
+                subtitle_ur: updatedSubUr,
+              }
+            : item
+        )
+      );
+
+      onToast?.('Hamd metadata updated successfully!');
+      setEditingHamd(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update Hamd');
+    } finally {
+      setUpdatingHamd(false);
     }
   };
 
@@ -230,115 +276,80 @@ export default function HamdManager({ onToast }: Props) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-              Subtitle (English, optional)
+              Subtitle / Context (English)
             </label>
             <input
               type="text"
               value={subtitleEn}
               onChange={(e) => setSubtitleEn(e.target.value)}
-              placeholder="Short description or collection name"
+              placeholder="e.g. Original handwritten manuscript, 1988"
               maxLength={300}
               className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
             />
           </div>
           <div>
             <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-              Subtitle (اردو، اختیاری)
+              Subtitle (اردو ذیلی عنوان)
             </label>
             <input
               type="text"
               dir="rtl"
               value={subtitleUr}
               onChange={(e) => setSubtitleUr(e.target.value)}
-              placeholder="مختصر تعریف یا مجموعے کا نام"
+              placeholder="مثلاً: اصل قلمی نسخہ مع اشعار، ۱۹۸۸ء"
               maxLength={300}
               className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-urdu focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
             />
           </div>
         </div>
 
-        {/* PDF picker */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="block text-xs font-semibold text-stone-700 uppercase tracking-wider">
-              Hamd PDF Document
-            </label>
-            <span className="text-[11px] text-stone-400 font-medium">
-              Allowed: PDF (Max {MAX_PDF_MB}MB)
-            </span>
+        {/* File picker */}
+        <div>
+          <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+            Hamd PDF Document (Max {MAX_PDF_MB}MB)
+          </label>
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              pickFile(e.dataTransfer.files?.[0]);
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-stone-300 hover:border-amber-700 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-stone-50/60"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={(e) => pickFile(e.target.files?.[0])}
+            />
+            <UploadCloud className="w-8 h-8 text-amber-800 mx-auto mb-2" />
+            {pdfFile ? (
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-stone-800">
+                  {pdfFile.name}
+                </p>
+                <p className="text-xs text-stone-500">
+                  {(pdfFile.size / (1024 * 1024)).toFixed(2)} MB • Click to replace
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-stone-700">
+                  Drag & drop your Hamd PDF here, or browse
+                </p>
+                <p className="text-xs text-stone-400">PDF documents up to 50MB</p>
+              </div>
+            )}
           </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/pdf,.pdf"
-            className="hidden"
-            onChange={(e) => pickFile(e.target.files?.[0])}
-          />
-
-          {pdfFile ? (
-            <div className="p-4 rounded-xl border border-stone-200 bg-stone-50/80 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-12 h-12 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-stone-800 truncate">
-                    {pdfFile.name}
-                  </p>
-                  <p className="text-xs text-stone-500">
-                    {(pdfFile.size / (1024 * 1024)).toFixed(1)} MB
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-stone-300 text-stone-700 hover:bg-stone-50"
-                >
-                  Replace
-                </button>
-                <button
-                  type="button"
-                  onClick={clearFile}
-                  className="text-xs text-rose-600 hover:text-rose-800 font-medium"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                pickFile(e.dataTransfer.files?.[0]);
-              }}
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer border-stone-300 bg-stone-50/50 hover:bg-stone-50 hover:border-amber-600 transition-all"
-            >
-              <div className="w-12 h-12 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-3">
-                <UploadCloud className="w-6 h-6 text-amber-800" />
-              </div>
-              <p className="text-sm font-semibold text-stone-800">
-                Click to upload or drag &amp; drop
-              </p>
-              <p className="text-xs text-stone-500 mt-1">
-                Accepts PDF documents (up to {MAX_PDF_MB}MB)
-              </p>
-            </div>
-          )}
-
           {fileError && (
-            <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
-              {fileError}
-            </div>
+            <p className="text-xs text-rose-600 mt-1.5 font-medium">{fileError}</p>
           )}
         </div>
 
         {submitError && (
-          <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
+          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
             {submitError}
           </div>
         )}
@@ -346,38 +357,29 @@ export default function HamdManager({ onToast }: Props) {
         <button
           type="submit"
           disabled={submitting}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-800 hover:bg-amber-900 disabled:bg-amber-300 text-white text-sm font-semibold shadow-md transition-colors"
+          className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-sm font-semibold shadow-md transition-colors disabled:opacity-50"
         >
           {submitting ? (
-            <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            <>
+              <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+              <span>Uploading to Archive...</span>
+            </>
           ) : (
-            <UploadCloud className="w-4 h-4" />
+            <span>Publish Hamd PDF</span>
           )}
-          <span>
-            {submitting ? 'Publishing…' : 'Publish Hamd PDF to Poetry Section'}
-          </span>
         </button>
       </form>
 
-      {/* --------------------- Published Hamd list --------------------- */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-bold text-stone-900 font-serif">
-              Published Hamd PDFs
-            </h3>
-            <p className="text-xs text-stone-500">
-              These PDFs appear in the public Poetry ▸ Hamd section where every
-              visitor can read them online.
-            </p>
-          </div>
+      {/* ------------------------- Existing List ------------------------- */}
+      <div className="pt-6 border-t border-stone-200 space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-bold text-stone-800 uppercase tracking-wider">
+            Published Hamd PDFs ({items.length})
+          </h4>
           <button
             type="button"
-            onClick={() => {
-              setLoading(true);
-              refresh();
-            }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 text-xs font-semibold shrink-0"
+            onClick={refresh}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 text-xs font-semibold shrink-0"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             Refresh
@@ -449,6 +451,14 @@ export default function HamdManager({ onToast }: Props) {
                     </a>
                     <button
                       type="button"
+                      onClick={() => setEditingHamd(item)}
+                      title="Edit Hamd Details"
+                      className="p-1.5 rounded-lg text-stone-400 hover:text-amber-800 hover:bg-amber-50 transition-colors"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleDelete(item)}
                       title="Delete Hamd PDF"
                       className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
@@ -462,6 +472,109 @@ export default function HamdManager({ onToast }: Props) {
           </ul>
         )}
       </div>
+
+      {/* Edit Hamd Modal */}
+      {editingHamd && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-sm"
+          onClick={() => !updatingHamd && setEditingHamd(null)}
+        >
+          <div
+            className="max-w-lg w-full bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+              <h3 className="text-lg font-bold text-stone-900 font-serif">
+                Edit Hamd Details
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingHamd(null)}
+                className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditHamd} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                  Title (English) *
+                </label>
+                <input
+                  name="title_en"
+                  type="text"
+                  required
+                  defaultValue={editingHamd.title_en}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                  Title (اردو عنوان) *
+                </label>
+                <input
+                  name="title_ur"
+                  type="text"
+                  dir="rtl"
+                  required
+                  defaultValue={editingHamd.title_ur}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                  Subtitle (English)
+                </label>
+                <input
+                  name="subtitle_en"
+                  type="text"
+                  defaultValue={editingHamd.subtitle_en || ''}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                  Subtitle (اردو)
+                </label>
+                <input
+                  name="subtitle_ur"
+                  type="text"
+                  dir="rtl"
+                  defaultValue={editingHamd.subtitle_ur || ''}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingHamd(null)}
+                  disabled={updatingHamd}
+                  className="px-4 py-2 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-50 text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingHamd}
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-sm font-semibold shadow-md disabled:opacity-50"
+                >
+                  {updatingHamd ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Inline reader for previewing published Hamd PDFs */}
       <PdfReaderModal

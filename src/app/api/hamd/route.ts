@@ -19,11 +19,6 @@ function cleanText(value: unknown, max: number): string | null {
  * POST /api/hamd
  * Save the metadata row for an already-uploaded Hamd PDF (admin only).
  * Body: { path, title_en, title_ur, subtitle_en?, subtitle_ur? }
- *
- * `path` must point inside the "hamd/" folder of the public-assets bucket and
- * the object must already exist there (the browser uploads it through the
- * signed URL issued by POST /api/hamd/upload-url, which keeps large PDFs out
- * of the Vercel serverless request body).
  */
 export async function POST(req: Request) {
   try {
@@ -112,9 +107,64 @@ export async function POST(req: Request) {
 }
 
 /**
+ * PATCH /api/hamd
+ * Update Hamd metadata (title_en, title_ur, subtitle_en, subtitle_ur).
+ */
+export async function PATCH(req: Request) {
+  try {
+    const session = await getAdminSession();
+    if (session.status !== 'ok') {
+      return NextResponse.json(
+        { error: 'Admin authentication required' },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const { id, title_en, title_ur, subtitle_en, subtitle_ur } = body;
+
+    if (!id || typeof id !== 'string' || !UUID_RE.test(id)) {
+      return NextResponse.json({ error: 'Valid record ID required' }, { status: 400 });
+    }
+
+    const cleanTitleEn = cleanText(title_en, 300);
+    const cleanTitleUr = cleanText(title_ur, 300);
+
+    if (!cleanTitleEn || !cleanTitleUr) {
+      return NextResponse.json({ error: 'title_en and title_ur are required' }, { status: 400 });
+    }
+
+    const supabase = session.client;
+    const { data: updated, error } = await supabase
+      .from('content')
+      .update({
+        title_en: cleanTitleEn,
+        title_ur: cleanTitleUr,
+        subtitle_en: cleanText(subtitle_en, 300),
+        subtitle_ur: cleanText(subtitle_ur, 300),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('type', 'hamd')
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, item: updated });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to update Hamd record' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
  * DELETE /api/hamd
  * Body: { id } — removes a Hamd record together with its storage object
- * (admin only). Refuses to touch records that are not of type 'hamd'.
  */
 export async function DELETE(req: Request) {
   try {

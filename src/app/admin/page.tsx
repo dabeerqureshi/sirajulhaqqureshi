@@ -29,8 +29,16 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
-  Loader2
+  Loader2,
+  Pencil,
+  X
 } from 'lucide-react';
+
+type EditingItem =
+  | { type: 'video'; item: VideoItem }
+  | { type: 'gallery'; item: GalleryItem }
+  | { type: 'poetry'; item: ContentItem }
+  | { type: 'book'; item: BookItem };
 
 export default function AdminPage() {
   const router = useRouter();
@@ -46,6 +54,10 @@ export default function AdminPage() {
   const [loadingData, setLoadingData] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Edit Modal State
+  const [editingItem, setEditingItem] = useState<EditingItem | null>(null);
+  const [updating, setUpdating] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -510,6 +522,101 @@ export default function AdminPage() {
     }
   };
 
+  // ==========================================
+  // UNIFIED EDIT / UPDATE HANDLER
+  // ==========================================
+  const handleSaveEdit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingItem) return;
+    const supabase = createClient();
+    if (!supabase) return;
+
+    setUpdating(true);
+    const formData = new FormData(e.currentTarget);
+    const { type, item } = editingItem;
+
+    try {
+      if (type === 'video') {
+        const updates = {
+          title_en: (formData.get('title_en') as string).trim(),
+          title_ur: (formData.get('title_ur') as string).trim(),
+          youtube_url: (formData.get('youtube_url') as string).trim() || null,
+          video_path: (formData.get('video_path') as string).trim() || (formData.get('youtube_url') as string).trim() || 'youtube',
+          category: formData.get('category') as string,
+          duration: (formData.get('duration') as string).trim() || null,
+          visibility: formData.get('visibility') as 'public' | 'restricted' | 'secret',
+          description_en: (formData.get('description_en') as string).trim() || null,
+          description_ur: (formData.get('description_ur') as string).trim() || null,
+          published: formData.get('published') === 'on',
+        };
+
+        const { error } = await supabase.from('videos').update(updates).eq('id', item.id);
+        if (error) throw error;
+        setVideosList((prev) => prev.map((v) => (v.id === item.id ? { ...v, ...updates } : v)));
+        showToast('Video updated successfully in Supabase!');
+      } else if (type === 'gallery') {
+        const updates = {
+          title_en: (formData.get('title_en') as string).trim(),
+          title_ur: (formData.get('title_ur') as string).trim(),
+          category: formData.get('category') as string,
+          taken_date: (formData.get('taken_date') as string).trim() || null,
+          file_path: (formData.get('file_path') as string).trim(),
+          visibility: formData.get('visibility') as 'public' | 'restricted',
+          description_en: (formData.get('description_en') as string).trim() || null,
+          description_ur: (formData.get('description_ur') as string).trim() || null,
+        };
+
+        const { error } = await supabase.from('gallery').update(updates).eq('id', item.id);
+        if (error) throw error;
+        setGalleryList((prev) => prev.map((g) => (g.id === item.id ? { ...g, ...updates } : g)));
+        showToast('Photograph updated successfully in Supabase!');
+      } else if (type === 'poetry') {
+        const urVerse = (formData.get('poemVerseUr') as string).trim();
+        const enVerse = (formData.get('poemVerseEn') as string).trim();
+        const updates = {
+          title_en: (formData.get('title_en') as string).trim(),
+          title_ur: (formData.get('title_ur') as string).trim(),
+          subtitle_en: (formData.get('subtitle_en') as string).trim() || null,
+          subtitle_ur: (formData.get('subtitle_ur') as string).trim() || null,
+          verses: [{ ur: urVerse, en: enVerse || undefined }],
+          visibility: formData.get('visibility') as 'public' | 'restricted',
+          published: formData.get('published') === 'on',
+        };
+
+        const { error } = await supabase.from('content').update(updates).eq('id', item.id);
+        if (error) throw error;
+        setPoetryList((prev) => prev.map((p) => (p.id === item.id ? { ...p, ...updates } : p)));
+        showToast('Poetic verse updated successfully in Supabase!');
+      } else if (type === 'book') {
+        const updates = {
+          title_en: (formData.get('title_en') as string).trim(),
+          title_ur: (formData.get('title_ur') as string).trim(),
+          author_en: (formData.get('author_en') as string).trim(),
+          author_ur: (formData.get('author_ur') as string).trim(),
+          category: formData.get('category') as string,
+          pages_count: parseInt(formData.get('pages_count') as string) || null,
+          published_year: (formData.get('published_year') as string).trim() || null,
+          cover_path: (formData.get('cover_path') as string).trim() || null,
+          file_path: (formData.get('file_path') as string).trim() || null,
+          visibility: formData.get('visibility') as 'public' | 'restricted',
+          description_en: (formData.get('description_en') as string).trim() || null,
+          description_ur: (formData.get('description_ur') as string).trim() || null,
+          published: formData.get('published') === 'on',
+        };
+
+        const { error } = await supabase.from('books').update(updates).eq('id', item.id);
+        if (error) throw error;
+        setBooksList((prev) => prev.map((b) => (b.id === item.id ? { ...b, ...updates } : b)));
+        showToast('Book updated successfully in Supabase!');
+      }
+      setEditingItem(null);
+    } catch (err) {
+      showToast(`Update failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
   if (authLoading) {
@@ -865,7 +972,7 @@ export default function AdminPage() {
             )}
 
             {/* ======================================================== */}
-            {/* TAB: VIDEOS & YOUTUBE MANAGEMENT (NEW!)                 */}
+            {/* TAB: VIDEOS & YOUTUBE MANAGEMENT                         */}
             {/* ======================================================== */}
             {activeTab === 'videos' && (
               <div className="space-y-10">
@@ -1023,38 +1130,55 @@ export default function AdminPage() {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {videosList.map((vid) => (
-                        <div key={vid.id} className="p-4 rounded-2xl border border-stone-200 bg-stone-50/50 hover:bg-white transition-all space-y-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h5 className="font-bold text-stone-900 text-sm line-clamp-1">{vid.title_en}</h5>
-                              <p className="font-urdu text-stone-600 text-xs mt-0.5 line-clamp-1">{vid.title_ur}</p>
+                        <div key={vid.id} className="p-4 rounded-2xl border border-stone-200 bg-stone-50/50 hover:bg-white transition-all space-y-3 flex flex-col justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h5 className="font-bold text-stone-900 text-sm line-clamp-1">{vid.title_en}</h5>
+                                <p className="font-urdu text-stone-600 text-xs mt-0.5 line-clamp-1">{vid.title_ur}</p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  onClick={() => setEditingItem({ type: 'video', item: vid })}
+                                  className="text-stone-400 hover:text-amber-800 p-1.5 rounded-lg hover:bg-amber-50 transition-colors"
+                                  title="Edit Video"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteVideo(vid.id)}
+                                  className="text-stone-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                                  title="Delete Video"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
-                            <button
-                              onClick={() => handleDeleteVideo(vid.id)}
-                              className="text-stone-400 hover:text-rose-600 p-1 rounded-lg"
-                              title="Delete Video"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+
+                            {vid.description_en && (
+                              <p className="text-xs text-stone-500 line-clamp-2">{vid.description_en}</p>
+                            )}
                           </div>
 
-                          <div className="flex items-center gap-2 text-xs text-stone-500">
-                            <span className="px-2 py-0.5 rounded-md bg-stone-200/80 font-medium">{vid.category}</span>
-                            {vid.duration && <span>⏱️ {vid.duration}</span>}
-                            <span className="capitalize ml-auto font-medium text-amber-800">{vid.visibility}</span>
-                          </div>
+                          <div className="space-y-2 pt-2 border-t border-stone-100">
+                            <div className="flex items-center gap-2 text-xs text-stone-500">
+                              <span className="px-2 py-0.5 rounded-md bg-stone-200/80 font-medium">{vid.category}</span>
+                              {vid.duration && <span>⏱️ {vid.duration}</span>}
+                              <span className="capitalize ml-auto font-medium text-amber-800">{vid.visibility}</span>
+                            </div>
 
-                          {vid.youtube_url && (
-                            <a
-                              href={vid.youtube_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1.5 text-xs text-amber-800 hover:text-amber-900 font-medium"
-                            >
-                              <Play className="w-3.5 h-3.5 fill-current" />
-                              <span className="truncate">Watch: {vid.youtube_url}</span>
-                            </a>
-                          )}
+                            {vid.youtube_url && (
+                              <a
+                                href={vid.youtube_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-1.5 text-xs text-amber-800 hover:text-amber-900 font-medium"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <span className="truncate">Watch: {vid.youtube_url}</span>
+                              </a>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1064,7 +1188,7 @@ export default function AdminPage() {
             )}
 
             {/* ======================================================== */}
-            {/* TAB: GALLERY PHOTOS (PNG, JPEG, WEBP)                   */}
+            {/* TAB: GALLERY PHOTOS                                      */}
             {/* ======================================================== */}
             {activeTab === 'gallery' && (
               <div className="space-y-10">
@@ -1249,15 +1373,27 @@ export default function AdminPage() {
                             alt={item.title_en}
                             className="w-full h-full object-cover"
                           />
-                          <div className="absolute inset-0 bg-stone-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 text-white">
-                            <button
-                              onClick={() => handleDeletePhoto(item.id)}
-                              className="self-end p-1 rounded-md bg-rose-600/90 hover:bg-rose-600 text-white"
-                              title="Delete Photo"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                            <p className="text-[11px] font-semibold truncate">{item.title_en}</p>
+                          <div className="absolute inset-0 bg-stone-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 text-white">
+                            <div className="flex items-center justify-end gap-1.5 self-end">
+                              <button
+                                onClick={() => setEditingItem({ type: 'gallery', item })}
+                                className="p-1 rounded-md bg-stone-900/90 hover:bg-amber-700 text-white transition-colors"
+                                title="Edit Photo"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeletePhoto(item.id)}
+                                className="p-1 rounded-md bg-rose-600/90 hover:bg-rose-600 text-white transition-colors"
+                                title="Delete Photo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-semibold truncate">{item.title_en}</p>
+                              <p className="text-[10px] text-amber-300 font-urdu truncate">{item.title_ur}</p>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1268,7 +1404,7 @@ export default function AdminPage() {
             )}
 
             {/* ======================================================== */}
-            {/* TAB: POETRY PUBLISHER (TEXT & SCANS)                    */}
+            {/* TAB: POETRY PUBLISHER                                    */}
             {/* ======================================================== */}
             {activeTab === 'poetry' && (
               <div className="space-y-10">
@@ -1389,26 +1525,42 @@ export default function AdminPage() {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {poetryList.map((poem) => (
-                        <div key={poem.id} className="p-4 rounded-2xl border border-stone-200 bg-stone-50/50 hover:bg-white transition-all space-y-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h5 className="font-bold text-stone-900 text-sm">{poem.title_en}</h5>
-                              <p className="font-urdu text-stone-600 text-xs mt-0.5">{poem.title_ur}</p>
+                        <div key={poem.id} className="p-4 rounded-2xl border border-stone-200 bg-stone-50/50 hover:bg-white transition-all space-y-3 flex flex-col justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h5 className="font-bold text-stone-900 text-sm">{poem.title_en}</h5>
+                                <p className="font-urdu text-stone-600 text-xs mt-0.5">{poem.title_ur}</p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  onClick={() => setEditingItem({ type: 'poetry', item: poem })}
+                                  className="text-stone-400 hover:text-amber-800 p-1.5 rounded-lg hover:bg-amber-50 transition-colors"
+                                  title="Edit Poem"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePoem(poem.id)}
+                                  className="text-stone-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                                  title="Delete Poem"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
-                            <button
-                              onClick={() => handleDeletePoem(poem.id)}
-                              className="text-stone-400 hover:text-rose-600 p-1 rounded-lg"
-                              title="Delete Poem"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+
+                            {poem.verses && poem.verses[0] && (
+                              <p className="font-urdu text-stone-700 text-sm whitespace-pre-line bg-amber-50/50 p-2.5 rounded-xl border border-amber-100">
+                                {poem.verses[0].ur}
+                              </p>
+                            )}
                           </div>
 
-                          {poem.verses && poem.verses[0] && (
-                            <p className="font-urdu text-stone-700 text-sm whitespace-pre-line bg-amber-50/50 p-2.5 rounded-xl border border-amber-100">
-                              {poem.verses[0].ur}
-                            </p>
-                          )}
+                          <div className="text-[11px] text-stone-500 flex items-center justify-between pt-2 border-t border-stone-100">
+                            <span className="capitalize text-amber-800 font-medium">{poem.visibility}</span>
+                            <span>{new Date(poem.created_at).toLocaleDateString()}</span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1611,22 +1763,37 @@ export default function AdminPage() {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {booksList.map((book) => (
-                        <div key={book.id} className="p-4 rounded-2xl border border-stone-200 bg-stone-50/50 hover:bg-white transition-all space-y-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h5 className="font-bold text-stone-900 text-sm line-clamp-1">{book.title_en}</h5>
-                              <p className="font-urdu text-stone-600 text-xs mt-0.5 line-clamp-1">{book.title_ur}</p>
+                        <div key={book.id} className="p-4 rounded-2xl border border-stone-200 bg-stone-50/50 hover:bg-white transition-all space-y-3 flex flex-col justify-between">
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h5 className="font-bold text-stone-900 text-sm line-clamp-1">{book.title_en}</h5>
+                                <p className="font-urdu text-stone-600 text-xs mt-0.5 line-clamp-1">{book.title_ur}</p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  onClick={() => setEditingItem({ type: 'book', item: book })}
+                                  className="text-stone-400 hover:text-amber-800 p-1.5 rounded-lg hover:bg-amber-50 transition-colors"
+                                  title="Edit Book"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteBook(book.id)}
+                                  className="text-stone-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                                  title="Delete Book"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
-                            <button
-                              onClick={() => handleDeleteBook(book.id)}
-                              className="text-stone-400 hover:text-rose-600 p-1 rounded-lg"
-                              title="Delete Book"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+
+                            {book.description_en && (
+                              <p className="text-xs text-stone-500 line-clamp-2">{book.description_en}</p>
+                            )}
                           </div>
 
-                          <div className="flex items-center gap-2 text-xs text-stone-500">
+                          <div className="flex items-center gap-2 text-xs text-stone-500 pt-2 border-t border-stone-100">
                             <span className="px-2 py-0.5 rounded-md bg-stone-200/80 font-medium">{book.category}</span>
                             {book.pages_count && <span>📖 {book.pages_count} p.</span>}
                             <span className="capitalize ml-auto font-medium text-amber-800">{book.visibility}</span>
@@ -1644,6 +1811,609 @@ export default function AdminPage() {
       </main>
 
       <Footer />
+
+      {/* ======================================================== */}
+      {/* UNIVERSAL EDIT MODAL FOR ALL MEDIA & CONTENT             */}
+      {/* ======================================================== */}
+      {editingItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/70 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => !updating && setEditingItem(null)}
+        >
+          <div
+            className="max-w-2xl w-full bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 sm:p-8 space-y-6 my-8 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-stone-200">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                  Editing {editingItem.type.toUpperCase()}
+                </span>
+                <h3 className="text-xl font-bold text-stone-900 font-serif">
+                  {editingItem.type === 'video' && 'Edit Video & YouTube Details'}
+                  {editingItem.type === 'gallery' && 'Edit Photograph Metadata'}
+                  {editingItem.type === 'poetry' && 'Edit Poetic Verses'}
+                  {editingItem.type === 'book' && 'Edit Publication Details'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                disabled={updating}
+                className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              {/* VIDEO EDIT FIELDS */}
+              {editingItem.type === 'video' && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Video Title (English) *
+                      </label>
+                      <input
+                        name="title_en"
+                        type="text"
+                        required
+                        defaultValue={editingItem.item.title_en}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Video Title (اردو عنوان) *
+                      </label>
+                      <input
+                        name="title_ur"
+                        type="text"
+                        dir="rtl"
+                        required
+                        defaultValue={editingItem.item.title_ur}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                      YouTube URL
+                    </label>
+                    <input
+                      name="youtube_url"
+                      type="url"
+                      defaultValue={editingItem.item.youtube_url || ''}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Category
+                      </label>
+                      <select
+                        name="category"
+                        defaultValue={editingItem.item.category || 'Lectures'}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm bg-white"
+                      >
+                        <option value="Lectures">Lectures & Addresses / خطبات</option>
+                        <option value="Mushaira">Mushaira & Poetry / مشاعرے</option>
+                        <option value="Interviews">Interviews / انٹرویوز</option>
+                        <option value="Documentary">Documentary / دستاویزی</option>
+                        <option value="Personal">Personal Memories / نجی یادیں</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Duration
+                      </label>
+                      <input
+                        name="duration"
+                        type="text"
+                        defaultValue={editingItem.item.duration || ''}
+                        placeholder="18:45"
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Visibility
+                      </label>
+                      <select
+                        name="visibility"
+                        defaultValue={editingItem.item.visibility}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm bg-white"
+                      >
+                        <option value="public">Public</option>
+                        <option value="restricted">Restricted</option>
+                        <option value="secret">Secret</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <input
+                    type="hidden"
+                    name="video_path"
+                    defaultValue={editingItem.item.video_path || ''}
+                  />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Description (English)
+                      </label>
+                      <textarea
+                        name="description_en"
+                        rows={2}
+                        defaultValue={editingItem.item.description_en || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Description (اردو)
+                      </label>
+                      <textarea
+                        name="description_ur"
+                        rows={2}
+                        dir="rtl"
+                        defaultValue={editingItem.item.description_ur || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-xs text-stone-700 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      name="published"
+                      defaultChecked={editingItem.item.published !== false}
+                      className="rounded text-amber-800"
+                    />
+                    <span>Published & Visible on Website</span>
+                  </label>
+                </>
+              )}
+
+              {/* GALLERY EDIT FIELDS */}
+              {editingItem.type === 'gallery' && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Photo Title (English) *
+                      </label>
+                      <input
+                        name="title_en"
+                        type="text"
+                        required
+                        defaultValue={editingItem.item.title_en}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Photo Title (اردو عنوان) *
+                      </label>
+                      <input
+                        name="title_ur"
+                        type="text"
+                        dir="rtl"
+                        required
+                        defaultValue={editingItem.item.title_ur}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Category
+                      </label>
+                      <select
+                        name="category"
+                        defaultValue={editingItem.item.category || 'Literary Events'}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm bg-white"
+                      >
+                        <option value="Personal Life">Personal Life / ذاتی زندگی</option>
+                        <option value="Literary Events">Literary Events / مشاعرے</option>
+                        <option value="Ceremonies">Ceremonies / تقریبات</option>
+                        <option value="Public Events">Public Events / عوامی اجتماعات</option>
+                        <option value="Family Life">Family Life / خاندانی لمحات</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Year / Date Taken
+                      </label>
+                      <input
+                        name="taken_date"
+                        type="text"
+                        defaultValue={editingItem.item.taken_date || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Visibility
+                      </label>
+                      <select
+                        name="visibility"
+                        defaultValue={editingItem.item.visibility}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm bg-white"
+                      >
+                        <option value="public">Public</option>
+                        <option value="restricted">Restricted (Blurred)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                      File Path / Image Source
+                    </label>
+                    <input
+                      name="file_path"
+                      type="text"
+                      required
+                      defaultValue={editingItem.item.file_path}
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Caption (English)
+                      </label>
+                      <textarea
+                        name="description_en"
+                        rows={2}
+                        defaultValue={editingItem.item.description_en || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Caption (اردو)
+                      </label>
+                      <textarea
+                        name="description_ur"
+                        rows={2}
+                        dir="rtl"
+                        defaultValue={editingItem.item.description_ur || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* POETRY EDIT FIELDS */}
+              {editingItem.type === 'poetry' && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Poem Title (English) *
+                      </label>
+                      <input
+                        name="title_en"
+                        type="text"
+                        required
+                        defaultValue={editingItem.item.title_en}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Poem Title (اردو عنوان) *
+                      </label>
+                      <input
+                        name="title_ur"
+                        type="text"
+                        dir="rtl"
+                        required
+                        defaultValue={editingItem.item.title_ur}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Subtitle (English)
+                      </label>
+                      <input
+                        name="subtitle_en"
+                        type="text"
+                        defaultValue={editingItem.item.subtitle_en || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Subtitle (اردو)
+                      </label>
+                      <input
+                        name="subtitle_ur"
+                        type="text"
+                        dir="rtl"
+                        defaultValue={editingItem.item.subtitle_ur || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                      Urdu Verses (اردو اشعار - نستعلیق) *
+                    </label>
+                    <textarea
+                      name="poemVerseUr"
+                      rows={4}
+                      dir="rtl"
+                      required
+                      defaultValue={editingItem.item.verses?.[0]?.ur || ''}
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-base font-urdu leading-loose"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                      English Translation / Commentary
+                    </label>
+                    <textarea
+                      name="poemVerseEn"
+                      rows={2}
+                      defaultValue={editingItem.item.verses?.[0]?.en || ''}
+                      className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Visibility
+                      </label>
+                      <select
+                        name="visibility"
+                        defaultValue={editingItem.item.visibility}
+                        className="px-3 py-1.5 rounded-xl border border-stone-300 text-xs bg-white"
+                      >
+                        <option value="public">Public</option>
+                        <option value="restricted">Restricted</option>
+                      </select>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs text-stone-700 cursor-pointer pt-4">
+                      <input
+                        type="checkbox"
+                        name="published"
+                        defaultChecked={editingItem.item.published !== false}
+                        className="rounded text-amber-800"
+                      />
+                      <span>Published</span>
+                    </label>
+                  </div>
+                </>
+              )}
+
+              {/* BOOK EDIT FIELDS */}
+              {editingItem.type === 'book' && (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Book Title (English) *
+                      </label>
+                      <input
+                        name="title_en"
+                        type="text"
+                        required
+                        defaultValue={editingItem.item.title_en}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Book Title (اردو عنوان) *
+                      </label>
+                      <input
+                        name="title_ur"
+                        type="text"
+                        dir="rtl"
+                        required
+                        defaultValue={editingItem.item.title_ur}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Author (English)
+                      </label>
+                      <input
+                        name="author_en"
+                        type="text"
+                        defaultValue={editingItem.item.author_en}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Author (اردو)
+                      </label>
+                      <input
+                        name="author_ur"
+                        type="text"
+                        dir="rtl"
+                        defaultValue={editingItem.item.author_ur}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Category
+                      </label>
+                      <select
+                        name="category"
+                        defaultValue={editingItem.item.category || 'Literature'}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm bg-white"
+                      >
+                        <option value="Poetry">Poetry / شاعری</option>
+                        <option value="Philosophy">Philosophy / فلسفہ و اخلاق</option>
+                        <option value="Memoirs">Memoirs / یادداشتیں</option>
+                        <option value="Literature">Literature / نثری ادب</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Total Pages
+                      </label>
+                      <input
+                        name="pages_count"
+                        type="number"
+                        defaultValue={editingItem.item.pages_count || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Year
+                      </label>
+                      <input
+                        name="published_year"
+                        type="text"
+                        defaultValue={editingItem.item.published_year || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        PDF File Path
+                      </label>
+                      <input
+                        name="file_path"
+                        type="text"
+                        defaultValue={editingItem.item.file_path || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Cover Image Path
+                      </label>
+                      <input
+                        name="cover_path"
+                        type="text"
+                        defaultValue={editingItem.item.cover_path || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Synopsis (English)
+                      </label>
+                      <textarea
+                        name="description_en"
+                        rows={2}
+                        defaultValue={editingItem.item.description_en || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Synopsis (اردو)
+                      </label>
+                      <textarea
+                        name="description_ur"
+                        rows={2}
+                        dir="rtl"
+                        defaultValue={editingItem.item.description_ur || ''}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                        Visibility
+                      </label>
+                      <select
+                        name="visibility"
+                        defaultValue={editingItem.item.visibility}
+                        className="px-3 py-1.5 rounded-xl border border-stone-300 text-xs bg-white"
+                      >
+                        <option value="public">Public</option>
+                        <option value="restricted">Restricted</option>
+                      </select>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs text-stone-700 cursor-pointer pt-4">
+                      <input
+                        type="checkbox"
+                        name="published"
+                        defaultChecked={editingItem.item.published !== false}
+                        className="rounded text-amber-800"
+                      />
+                      <span>Published</span>
+                    </label>
+                  </div>
+                </>
+              )}
+
+              {/* Modal Action Buttons */}
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem(null)}
+                  disabled={updating}
+                  className="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-50 text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-sm font-semibold shadow-md transition-colors disabled:opacity-50"
+                >
+                  {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
