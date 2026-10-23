@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useLanguage } from '@/context/LanguageContext';
@@ -11,6 +12,8 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
+  ArrowLeft,
+  Loader2,
 } from 'lucide-react';
 
 export default function AdminLoginPage() {
@@ -27,27 +30,24 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError(null);
 
-    // Created lazily so a missing env var surfaces as a friendly error instead
-    // of crashing the page (and the production build) at render time.
     const supabase = createClient();
     if (!supabase) {
       setLoading(false);
       setError(
         language === 'ur'
           ? 'سپرابیس کنفیگر نہیں کیا گیا۔ NEXT_PUBLIC_SUPABASE متغیرات چیک کریں۔'
-          : 'Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY).'
+          : 'Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and API keys.'
       );
       return;
     }
 
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
 
-    setLoading(false);
-
     if (signInError) {
+      setLoading(false);
       setError(signInError.message);
       return;
     }
@@ -59,9 +59,15 @@ export default function AdminLoginPage() {
       .eq('id', (await supabase.auth.getUser()).data.user?.id)
       .single();
 
+    setLoading(false);
+
     if (profile?.role !== 'admin') {
       await supabase.auth.signOut();
-      setError(language === 'ur' ? 'فقط ایڈمن لاگ ان کر سکتا ہے' : 'Only admins can access this portal');
+      setError(
+        language === 'ur'
+          ? 'فقط ایڈمن لاگ ان کر سکتا ہے۔ اس اکاؤنٹ کے پاس ایڈمن کے اختیارات نہیں ہیں۔'
+          : 'Access denied: your account is not authorized as an administrator.'
+      );
       return;
     }
 
@@ -70,92 +76,105 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
-      <div className="max-w-md w-full bg-white rounded-3xl border border-stone-200 shadow-xl p-8 sm:p-12">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-stone-100 px-4 py-12">
+      {/* Return to website */}
+      <div className="mb-6">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-stone-600 hover:text-amber-800 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>{language === 'ur' ? 'مرکزی ویب سائٹ پر واپس جائیں' : 'Back to Digital Archive'}</span>
+        </Link>
+      </div>
+
+      <div className="max-w-md w-full bg-white rounded-3xl border border-stone-200/80 shadow-xl p-8 sm:p-10">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-full bg-amber-800 text-amber-100 flex items-center justify-center mx-auto mb-4 text-xl font-bold">
-            <Shield className="w-6 h-6" />
+          <div className="w-14 h-14 rounded-2xl bg-amber-800 text-amber-100 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-900/20">
+            <Shield className="w-7 h-7" />
           </div>
           <h2 className={`text-2xl font-bold text-stone-900 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
-            {language === 'ur' ? 'ایڈمن لاگ ان' : 'Admin Login'}
+            {language === 'ur' ? 'ایڈمن کنٹرول پینل' : 'Administrator Portal'}
           </h2>
-          <p className="text-stone-600 text-sm mt-2">
+          <p className={`text-stone-500 text-xs mt-1.5 ${language === 'ur' ? 'font-urdu' : ''}`}>
             {language === 'ur'
-              ? 'دخول کے لیے اپنے ایڈمن email اور پاسورڈ درج کریں۔'
-              : 'Enter your admin email and password to access the portal.'}
+              ? 'محفوظ کتب، اشعار، ویڈیوز اور منظوریوں کا انتظام کریں۔'
+              : 'Sign in to manage books, manuscripts, videos, and access requests.'}
           </p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm">
+          <div className="mb-6 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium leading-relaxed">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-5">
+        <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-stone-700 uppercase mb-2">
-              {language === 'ur' ? 'ای میل ایڈریس' : 'Email Address'}
+            <label className="block text-xs font-semibold text-stone-700 uppercase mb-1.5">
+              {language === 'ur' ? 'ای میل ایڈریس' : 'Admin Email'}
             </label>
-            <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-3.5" />
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@example.com"
-              className="w-full pl-11 pr-4 py-3 rounded-2xl bg-stone-50 border border-stone-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
-            />
+            <div className="relative">
+              <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@sirajulhaqqureshi.com"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
+              />
+            </div>
           </div>
 
-          <div className="relative">
-            <label className="block text-xs font-semibold text-stone-700 uppercase mb-2">
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 uppercase mb-1.5">
               {language === 'ur' ? 'پاسورڈ' : 'Password'}
             </label>
-            <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-3.5" />
-            <input
-              type={showPassword ? 'text' : 'password'}
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full pl-11 pr-10 py-3 rounded-2xl bg-stone-50 border border-stone-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3.5 top-3.5 text-stone-400 hover:text-stone-600"
-            >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
+            <div className="relative">
+              <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1"
+                aria-label="Toggle password visibility"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-amber-800 hover:bg-amber-900 disabled:bg-amber-300 text-white text-sm font-semibold shadow-md transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-amber-800 hover:bg-amber-900 disabled:opacity-50 text-white text-sm font-semibold shadow-md transition-colors mt-2"
           >
             {loading ? (
               <>
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span>{language === 'ur' ? 'دخول کیا جا رہا ہے...' : 'Signing in...'}</span>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>{language === 'ur' ? 'تصدیق جاری ہے...' : 'Authenticating...'}</span>
               </>
             ) : (
               <>
+                <span>{language === 'ur' ? 'دخول کریں' : 'Sign In to Console'}</span>
                 <ArrowRight className="w-4 h-4" />
-                <span>{language === 'ur' ? 'دخول کریں' : 'Sign In'}</span>
               </>
             )}
           </button>
         </form>
 
-        <p className="mt-8 text-center text-xs text-stone-500">
+        <p className="mt-8 text-center text-[11px] text-stone-400">
           {language === 'ur'
-            ? 'یہ پورٹل صرف مجاز ایڈمنстриٹرز کے لیے ہے۔'
-            : 'This portal is restricted to authorized administrators only.'}
+            ? 'سیکیور سپرابیس توثیق • فقط مجاز ایڈمنسٹریٹرز'
+            : 'Protected by Supabase Auth with Row Level Security'}
         </p>
       </div>
     </div>

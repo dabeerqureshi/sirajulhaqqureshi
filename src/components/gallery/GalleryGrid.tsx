@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { GalleryItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
-import { Lock, Eye, Calendar, Filter } from 'lucide-react';
+import { Lock, Eye, Calendar, Filter, X } from 'lucide-react';
 
 interface GalleryGridProps {
   items: GalleryItem[];
@@ -52,7 +52,14 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
               className="group relative bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-lg transition-all flex flex-col"
             >
               {/* Image Frame */}
-              <div className="relative h-64 w-full overflow-hidden bg-stone-900">
+              <div
+                onClick={() => {
+                  if (!isRestricted) setActivePhoto(item);
+                }}
+                className={`relative h-64 w-full overflow-hidden bg-stone-900 ${
+                  !isRestricted ? 'cursor-pointer' : ''
+                }`}
+              >
                 <img
                   src={item.file_path}
                   alt={item.title_en}
@@ -63,7 +70,10 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
 
                 {/* Restricted overlay banner */}
                 {isRestricted ? (
-                  <div className="absolute inset-0 bg-stone-950/50 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center text-white">
+                  <div
+                    className="absolute inset-0 bg-stone-950/50 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center text-white"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="w-12 h-12 rounded-full bg-rose-500/20 border border-rose-500/50 text-rose-300 flex items-center justify-center mb-3">
                       <Lock className="w-6 h-6" />
                     </div>
@@ -82,13 +92,10 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
                   </div>
                 ) : (
                   <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                    <button
-                      onClick={() => setActivePhoto(item)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/90 text-stone-900 text-xs font-medium backdrop-blur-xs shadow-md"
-                    >
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/90 text-stone-900 text-xs font-medium backdrop-blur-xs shadow-md">
                       <Eye className="w-3.5 h-3.5" />
                       <span>{language === 'ur' ? 'بڑا دیکھیں' : 'View Full Image'}</span>
-                    </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -121,32 +128,45 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
       {/* Lightbox Modal for Public Photos */}
       {activePhoto && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/90 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/90 backdrop-blur-md animate-in fade-in duration-200"
           onClick={() => setActivePhoto(null)}
         >
           <div
-            className="max-w-4xl w-full bg-stone-900 rounded-2xl overflow-hidden shadow-2xl border border-stone-800"
+            className="max-w-4xl w-full bg-stone-900 rounded-3xl overflow-hidden shadow-2xl border border-stone-800 relative flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative max-h-[70vh] bg-black flex items-center justify-center">
+            <button
+              onClick={() => setActivePhoto(null)}
+              className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-stone-900/80 hover:bg-stone-800 text-white flex items-center justify-center border border-stone-700 transition-colors"
+              aria-label="Close photo"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="relative max-h-[75vh] bg-black flex items-center justify-center p-2">
               <img
                 src={activePhoto.file_path}
                 alt={activePhoto.title_en}
-                className="max-h-[70vh] w-auto object-contain"
+                className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg"
               />
             </div>
-            <div className="p-6 bg-stone-900 text-white flex items-center justify-between">
+            <div className="p-6 bg-stone-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-stone-800">
               <div>
-                <h3 className={`text-lg font-bold ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
+                <h3 className={`text-lg font-bold text-amber-200 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
                   {language === 'ur' ? activePhoto.title_ur : activePhoto.title_en}
                 </h3>
-                <p className="text-xs text-stone-400 mt-1">
+                {activePhoto.taken_date && (
+                  <p className="text-xs text-amber-500/80 mt-0.5">
+                    {activePhoto.taken_date} • {activePhoto.category}
+                  </p>
+                )}
+                <p className={`text-xs text-stone-400 mt-1.5 ${language === 'ur' ? 'font-urdu' : ''}`}>
                   {language === 'ur' ? activePhoto.description_ur : activePhoto.description_en}
                 </p>
               </div>
               <button
                 onClick={() => setActivePhoto(null)}
-                className="px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-xs font-medium text-stone-200"
+                className="self-end sm:self-center px-4 py-2 rounded-xl bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-stone-200 transition-colors shrink-0"
               >
                 {language === 'ur' ? 'بند کریں' : 'Close'}
               </button>

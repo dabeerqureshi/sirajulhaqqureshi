@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
@@ -10,15 +10,60 @@ import GalleryGrid from '@/components/gallery/GalleryGrid';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import BookReaderModal from '@/components/books/BookReaderModal';
 import { useLanguage } from '@/context/LanguageContext';
-import { BookItem } from '@/types/database';
-import { mockIntro, mockBiography, mockPoetry, mockBooks, mockGallery } from '@/lib/data/mockData';
-import { Feather, BookOpen, ArrowRight, Sparkles } from 'lucide-react';
+import { BookItem, ContentItem, GalleryItem } from '@/types/database';
+import { mockIntro, mockBiography, mockGallery } from '@/lib/data/mockData';
+import { createClient } from '@/lib/supabase/client';
+import { Feather, BookOpen, ArrowRight, Sparkles, ScrollText } from 'lucide-react';
 
 export default function HomePage() {
   const { language, t } = useLanguage();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedItemTitle, setSelectedItemTitle] = useState('');
   const [activeReadingBook, setActiveReadingBook] = useState<BookItem | null>(null);
+
+  const [poetry, setPoetry] = useState<ContentItem[]>([]);
+  const [books, setBooks] = useState<BookItem[]>([]);
+  const [gallery, setGallery] = useState<GalleryItem[]>(mockGallery.slice(0, 3));
+
+  useEffect(() => {
+    const loadData = async () => {
+      const supabase = createClient();
+      if (!supabase) return;
+
+      const [poemsRes, booksRes, galleryRes] = await Promise.all([
+        supabase
+          .from('content')
+          .select('*')
+          .eq('type', 'poetry')
+          .eq('published', true)
+          .order('created_at', { ascending: false })
+          .limit(3),
+        supabase
+          .from('books')
+          .select('*')
+          .eq('published', true)
+          .order('created_at', { ascending: false })
+          .limit(2),
+        supabase
+          .from('gallery')
+          .select('*')
+          .order('sort_order', { ascending: true })
+          .limit(3),
+      ]);
+
+      if (poemsRes.data && poemsRes.data.length > 0) {
+        setPoetry(poemsRes.data);
+      }
+      if (booksRes.data && booksRes.data.length > 0) {
+        setBooks(booksRes.data);
+      }
+      if (galleryRes.data && galleryRes.data.length > 0) {
+        setGallery(galleryRes.data);
+      }
+    };
+
+    loadData();
+  }, []);
 
   const handleRequestAccess = (title: string) => {
     setSelectedItemTitle(title);
@@ -61,19 +106,19 @@ export default function HomePage() {
 
                 <div className="pt-4 flex flex-wrap items-center gap-4">
                   <Link
-                    href="/books"
+                    href="/poetry"
                     className="flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-700 hover:bg-amber-600 text-white text-sm font-semibold shadow-lg shadow-amber-950/40 transition-all"
                   >
-                    <BookOpen className="w-4 h-4" />
-                    <span>{language === 'ur' ? 'کتب و تصانیف کا مطالعہ کریں' : 'Explore Books & Library'}</span>
+                    <Feather className="w-4 h-4 text-amber-200" />
+                    <span>{language === 'ur' ? 'حمد و کلام کا مطالعہ کریں' : 'Read Hamd & Poetry'}</span>
                   </Link>
 
                   <Link
-                    href="/poetry"
+                    href="/gallery"
                     className="flex items-center gap-2 px-6 py-3 rounded-xl bg-stone-800/90 hover:bg-stone-800 text-stone-200 border border-stone-700 text-sm font-semibold transition-all"
                   >
-                    <Feather className="w-4 h-4 text-amber-400" />
-                    <span>{language === 'ur' ? 'شاعری پڑھیں' : 'Read Poetry'}</span>
+                    <span>{language === 'ur' ? 'تصویری دستاویزات' : 'Explore Gallery'}</span>
+                    <ArrowRight className="w-4 h-4 text-amber-400" />
                   </Link>
                 </div>
               </div>
@@ -128,9 +173,9 @@ export default function HomePage() {
             <div className="lg:col-span-4">
               <div className="rounded-2xl overflow-hidden border border-stone-200 shadow-md">
                 <img
-                  src={mockBiography.cover_image || ''}
-                  alt="Scholarly study"
-                  className="w-full h-56 object-cover"
+                  src={mockBiography.cover_image || '/gallery/siraj-04.jpg'}
+                  alt="Siraj ul Haq Qureshi Formal Portrait"
+                  className="w-full h-72 object-cover object-top"
                 />
               </div>
             </div>
@@ -143,10 +188,10 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 gap-4">
               <div>
                 <span className="text-xs uppercase tracking-widest text-amber-800 font-bold">
-                  {language === 'ur' ? 'منتخب کلام' : 'Poetry Archive'}
+                  {language === 'ur' ? 'منتخب کلام و حمد' : 'Poetry & Hamd Archive'}
                 </span>
                 <h2 className={`text-2xl sm:text-3xl font-bold text-stone-900 mt-1 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
-                  {t('recentPoetry')}
+                  {language === 'ur' ? 'حمدیہ مسودات اور شعری ورثہ' : 'Hamd Manuscripts & Poetic Legacy'}
                 </h2>
               </div>
               <Link
@@ -158,49 +203,76 @@ export default function HomePage() {
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {mockPoetry.slice(0, 3).map((poem) => (
-                <PoetryCard
-                  key={poem.id}
-                  poetry={poem}
+            {poetry.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {poetry.map((poem) => (
+                  <PoetryCard
+                    key={poem.id}
+                    poetry={poem}
+                    onRequestAccess={handleRequestAccess}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-3xl p-8 sm:p-10 border border-stone-200 text-center max-w-2xl mx-auto space-y-4">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-50 flex items-center justify-center text-amber-800">
+                  <ScrollText className="w-7 h-7" />
+                </div>
+                <h3 className={`text-xl font-bold text-stone-800 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
+                  {language === 'ur' ? 'حمد و مناجات کے اصل قلمی نسخے' : 'Original Hamd Manuscripts'}
+                </h3>
+                <p className={`text-sm text-stone-600 leading-relaxed ${language === 'ur' ? 'font-urdu' : ''}`}>
+                  {language === 'ur'
+                    ? 'سراج الحق قریشی کے دستخط شدہ حمدیہ کلام کے اصل محفوظ صفحات کو ڈیجیٹل فارمیٹ میں پیش کیا گیا ہے۔'
+                    : 'The authentic handwritten Hamd manuscripts authored by Siraj ul Haq Qureshi are preserved and available for digital reading.'}
+                </p>
+                <div>
+                  <Link
+                    href="/poetry"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-sm font-semibold transition-all shadow-xs"
+                  >
+                    <span>{language === 'ur' ? 'حمدیہ صفحات ملاحظہ کریں' : 'Read Hamd Manuscripts'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* BOOKS SECTION (Rendered if published books exist) */}
+        {books.length > 0 && (
+          <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 gap-4">
+              <div>
+                <span className="text-xs uppercase tracking-widest text-amber-800 font-bold">
+                  {language === 'ur' ? 'کتب خانہ' : 'Published Works'}
+                </span>
+                <h2 className={`text-2xl sm:text-3xl font-bold text-stone-900 mt-1 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
+                  {t('featuredWorks')}
+                </h2>
+              </div>
+              <Link
+                href="/books"
+                className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-amber-800 hover:text-amber-900"
+              >
+                <span>{t('viewAll')}</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {books.map((book) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
                   onRequestAccess={handleRequestAccess}
+                  onReadOnline={handleReadOnline}
                 />
               ))}
             </div>
-          </div>
-        </section>
-
-        {/* BOOKS & PUBLICATIONS SECTION */}
-        <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 gap-4">
-            <div>
-              <span className="text-xs uppercase tracking-widest text-amber-800 font-bold">
-                {language === 'ur' ? 'کتب خانہ' : 'Published Works'}
-              </span>
-              <h2 className={`text-2xl sm:text-3xl font-bold text-stone-900 mt-1 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
-                {t('featuredWorks')}
-              </h2>
-            </div>
-            <Link
-              href="/books"
-              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-amber-800 hover:text-amber-900"
-            >
-              <span>{t('viewAll')}</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {mockBooks.map((book) => (
-              <BookCard
-                key={book.id}
-                book={book}
-                onRequestAccess={handleRequestAccess}
-                onReadOnline={handleReadOnline}
-              />
-            ))}
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* GALLERY HIGHLIGHTS */}
         <section className="py-20 bg-stone-900 text-white">
@@ -224,7 +296,7 @@ export default function HomePage() {
             </div>
 
             <GalleryGrid
-              items={mockGallery.slice(0, 3)}
+              items={gallery}
               onRequestAccess={handleRequestAccess}
             />
           </div>

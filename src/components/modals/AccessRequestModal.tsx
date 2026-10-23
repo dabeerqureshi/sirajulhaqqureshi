@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
-import { Lock, X, CheckCircle, Send } from 'lucide-react';
+import { Lock, X, CheckCircle, Send, Loader2 } from 'lucide-react';
 
 interface AccessRequestModalProps {
   isOpen: boolean;
@@ -23,18 +23,52 @@ export default function AccessRequestModal({
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMessage(null);
 
-    // Simulate request submission to Supabase
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      let rType = 'all';
+      const low = (resourceType || '').toLowerCase();
+      if (low.includes('gallery') || low.includes('photo')) rType = 'gallery';
+      else if (low.includes('book') || low.includes('publication')) rType = 'books';
+      else if (low.includes('poem') || low.includes('ghazal') || low.includes('poetry')) rType = 'poetry';
+      else if (low.includes('video')) rType = 'video';
+
+      const res = await fetch('/api/access-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          reason: reason.trim(),
+          resource_type: rType,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit request');
+      }
+
       setSubmitted(true);
-    }, 600);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : language === 'ur'
+          ? 'درخواست جمع کرنے میں خرابی پیش آئی'
+          : 'Failed to submit request. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleReset = () => {
@@ -42,16 +76,17 @@ export default function AccessRequestModal({
     setName('');
     setEmail('');
     setReason('');
+    setErrorMessage(null);
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-stone-200 p-6 sm:p-8">
+      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 sm:p-8">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+          className="absolute top-5 right-5 p-2 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
           aria-label="Close modal"
         >
           <X className="w-5 h-5" />
@@ -63,12 +98,12 @@ export default function AccessRequestModal({
               <CheckCircle className="w-8 h-8" />
             </div>
             <h3 className={`text-xl font-bold text-stone-900 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
-              {language === 'ur' ? 'درخواست کامیابی سے ارسال کر دی گئی ہے' : 'Request Submitted Successfully'}
+              {language === 'ur' ? 'درخواست کامیابی سے موصول ہو گئی' : 'Request Submitted Successfully'}
             </h3>
             <p className={`text-sm text-stone-600 leading-relaxed ${language === 'ur' ? 'font-urdu' : ''}`}>
               {language === 'ur'
-                ? 'آپ کی رسائی کی درخواست ایڈمن کو موصول ہو چکی ہے۔ جانچ پڑتال کے بعد آپ کو بذریعہ ای میل مطلع کیا جائے گا۔'
-                : 'Your access request has been forwarded to the archive administrator. You will receive an email once approved.'}
+                ? 'آپ کی رسائی کی درخواست ایڈمنسٹریٹر کو ارسال کر دی گئی ہے۔ منظوری کے بعد آپ کے ای میل پر تصدیق بھیجی جائے گی۔'
+                : 'Your access request has been sent to the archive administrator for review. Once approved, you will have access to the restricted materials.'}
             </p>
             <div className="pt-4">
               <button
@@ -95,70 +130,84 @@ export default function AccessRequestModal({
               </div>
             </div>
 
-            <p className={`text-xs text-stone-600 mb-6 bg-stone-50 p-3 rounded-lg border border-stone-200 ${language === 'ur' ? 'font-urdu' : ''}`}>
+            <p className={`text-xs text-stone-600 mb-6 bg-stone-50 p-3 rounded-xl border border-stone-200 ${language === 'ur' ? 'font-urdu' : ''}`}>
               {language === 'ur'
-                ? 'یہ دستاویز یا تصویر خصوصی نگہداشت میں ہے۔ براہ کرم اپنا تعارف اور ضرورت درج کریں تاکہ ایڈمن رسائی منظور کر سکے۔'
-                : 'This archival material is restricted. Please provide your information and scholarly or personal reason for requesting access.'}
+                ? 'یہ دستاویز یا تصویر نجی یا تحقیقی نگہداشت میں ہے۔ براہ کرم اپنا تعارف اور ضرورت درج کریں تاکہ ایڈمن رسائی منظور کر سکے۔'
+                : 'This item is part of the restricted historical or family collection. Please provide your details and rationale for access.'}
             </p>
+
+            {errorMessage && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
+                {errorMessage}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">
-                  {language === 'ur' ? 'پورا نام' : 'Full Name'}
+                <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                  {language === 'ur' ? 'آپ کا مکمل نام' : 'Your Full Name'} *
                 </label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder={language === 'ur' ? 'مثلاً محمد علی' : 'e.g. Muhammad Ali'}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-hidden focus:ring-2 focus:ring-amber-700/30 focus:border-amber-700 text-sm"
+                  placeholder={language === 'ur' ? 'مثلاً: محمد احمد' : 'e.g. Dr. Sarah Jenkins'}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">
-                  {language === 'ur' ? 'ای میل ایڈریس' : 'Email Address'}
+                <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                  {language === 'ur' ? 'ای میل ایڈریس' : 'Email Address'} *
                 </label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="user@example.com"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-hidden focus:ring-2 focus:ring-amber-700/30 focus:border-amber-700 text-sm"
+                  placeholder="name@university.edu"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">
-                  {language === 'ur' ? 'رسائی کی وجہ / تعلق' : 'Reason for Access / Affiliation'}
+                <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
+                  {language === 'ur' ? 'رسائی کی وجہ یا تحقیقی مقصد' : 'Purpose of Access / Affiliation'} *
                 </label>
                 <textarea
-                  required
                   rows={3}
+                  required
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder={language === 'ur' ? 'تحقیقی مقصد، خاندانی تعلق یا ذاتی مطالعہ...' : 'Research inquiry, family affiliation, or academic study...'}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-hidden focus:ring-2 focus:ring-amber-700/30 focus:border-amber-700 text-sm"
+                  placeholder={
+                    language === 'ur'
+                      ? 'مثلاً: پی ایچ ڈی مقالے کے لیے نایاب خطوط کا مطالعہ درکار ہے...'
+                      : 'e.g. Academic research on classical South Asian literature, family member, etc.'
+                  }
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-2 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-xl text-stone-600 hover:bg-stone-100 text-sm font-medium"
+                  className="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-50 text-sm font-medium"
                 >
-                  {language === 'ur' ? 'منسوخ' : 'Cancel'}
+                  {language === 'ur' ? 'منسوخ کریں' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-800 text-white hover:bg-amber-900 text-sm font-medium shadow-md transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-sm font-semibold shadow-md transition-colors disabled:opacity-50"
                 >
-                  <Send className="w-4 h-4" />
-                  <span>{loading ? (language === 'ur' ? 'ارسال ہو رہا ہے...' : 'Submitting...') : (language === 'ur' ? 'درخواست بھیجیں' : 'Submit Request')}</span>
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  <span>{language === 'ur' ? 'درخواست بھیجیں' : 'Submit Request'}</span>
                 </button>
               </div>
             </form>

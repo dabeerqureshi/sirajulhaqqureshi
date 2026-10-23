@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useLanguage } from '@/context/LanguageContext';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import YouTubeEmbed from '@/components/videos/YouTubeEmbed';
-import { Play, Lock, Video, X, KeyRound } from 'lucide-react';
+import { Play, Lock, Video, X, KeyRound, Search, Filter } from 'lucide-react';
 import { decryptFile, fromBase64Url } from '@/lib/crypto';
 import type { VideoItem } from '@/types/database';
 
@@ -31,11 +31,13 @@ export default function VideosPage() {
   const [decryptError, setDecryptError] = useState('');
   const [decrypting, setDecrypting] = useState(false);
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
       if (!supabase) {
-        // Supabase env vars not configured — render the empty state instead of crashing.
         setLoading(false);
         return;
       }
@@ -64,16 +66,13 @@ export default function VideosPage() {
   };
 
   const handlePlayVideo = async (item: VideoItem) => {
-    // YouTube-hosted videos play inline via YouTubeEmbed in the card UI.
     const ytId = item.youtube_url ? extractYouTubeId(item.youtube_url) : null;
     const isLocked =
       item.visibility === 'restricted' ||
       (item.visibility === 'secret' && item.is_encrypted);
 
-    // Unlocked YouTube videos already play inline in the card — nothing to open.
     if (ytId && !isLocked) return;
 
-    // Secret encrypted files: open the password modal and decrypt client-side.
     if (item.visibility === 'secret' && item.is_encrypted) {
       setPassword('');
       setDecryptError('');
@@ -81,7 +80,6 @@ export default function VideosPage() {
       return;
     }
 
-    // Restricted content without a YouTube URL: password modal for encrypted files.
     if (item.visibility === 'restricted') {
       if (!item.is_encrypted) {
         handleRequestAccess(language === 'ur' ? item.title_ur : item.title_en);
@@ -93,7 +91,6 @@ export default function VideosPage() {
       return;
     }
 
-    // Public video (non-YouTube): open the file via a signed URL or the raw URL.
     if (item.video_path.startsWith('http')) {
       window.open(item.video_path, '_blank');
       return;
@@ -147,6 +144,20 @@ export default function VideosPage() {
     }
   };
 
+  const categories = ['All', ...Array.from(new Set(videos.map((v) => v.category || 'Lectures')))];
+
+  const filteredVideos = videos.filter((item) => {
+    const matchesCat = selectedCategory === 'All' || item.category === selectedCategory;
+    const q = searchTerm.toLowerCase();
+    const matchesSearch =
+      !searchTerm ||
+      item.title_en.toLowerCase().includes(q) ||
+      item.title_ur.includes(searchTerm) ||
+      (item.description_en && item.description_en.toLowerCase().includes(q)) ||
+      (item.description_ur && item.description_ur.includes(searchTerm));
+    return matchesCat && matchesSearch;
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-stone-50">
@@ -171,11 +182,11 @@ export default function VideosPage() {
       <main className="flex-1 py-12 sm:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header Banner */}
-          <div className="text-center max-w-3xl mx-auto mb-12 space-y-4">
+          <div className="text-center max-w-3xl mx-auto mb-10 space-y-4">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-100 text-amber-900 text-xs font-semibold">
               <Video className="w-3.5 h-3.5 text-amber-700" />
               <span>
-                {language === 'ur' ? 'تقریریں، مشاعرے اور مخصوص ویڈیوز' : 'Speeches, Mushairas & Special Recordings'}
+                {language === 'ur' ? 'تقریریں، مشاعرے اور مخصوص ویڈیوز' : 'Speeches, Mushairas & Video Archives'}
               </span>
             </div>
             <h1 className={`text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-900 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
@@ -183,22 +194,68 @@ export default function VideosPage() {
             </h1>
             <p className={`text-stone-600 text-sm sm:text-base leading-relaxed ${language === 'ur' ? 'font-urdu' : ''}`}>
               {language === 'ur'
-                ? 'سراج الحق قریشی کی تقاریر، علمی مجالس اور مشاعروں کا نایاب ویڈیو ریکارڈ۔ کچھ ویڈیوز صرف مجاز صارفین کے لیے مخصوص ہیں۔'
-                : 'A curated collection of speeches, intellectual sessions, and mushairas by Siraj ul Haq Qureshi. Some recordings are restricted to authorized viewers.'}
+                ? 'سراج الحق قریشی کی تقاریر، علمی مجالس اور مشاعروں کا نایاب ویڈیو ریکارڈ۔'
+                : 'A curated collection of speeches, intellectual sessions, and historic recordings by Siraj ul Haq Qureshi.'}
             </p>
+
+            {videos.length > 0 && (
+              <div className="relative max-w-md mx-auto pt-2">
+                <Search className="w-4 h-4 text-stone-400 absolute left-4 top-5" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={language === 'ur' ? 'ویڈیو تلاش کریں...' : 'Search videos...'}
+                  className="w-full pl-11 pr-4 py-2.5 rounded-2xl bg-white border border-stone-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30 shadow-xs"
+                />
+              </div>
+            )}
           </div>
+
+          {/* Category Filter Pills */}
+          {videos.length > 0 && categories.length > 2 && (
+            <div className="flex items-center justify-center gap-2 overflow-x-auto pb-6 scrollbar-none">
+              <Filter className="w-4 h-4 text-stone-400 shrink-0" />
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+                    selectedCategory === cat
+                      ? 'bg-amber-800 text-white shadow-xs'
+                      : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
+                  }`}
+                >
+                  {cat === 'All' ? (language === 'ur' ? 'تمام' : 'All') : cat}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Video Grid */}
           {videos.length === 0 ? (
+            <div className="max-w-xl mx-auto text-center py-16 px-6 bg-white rounded-3xl border border-stone-200/80 shadow-xs">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-800">
+                <Video className="w-8 h-8" />
+              </div>
+              <h3 className={`text-xl font-bold text-stone-800 mb-2 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
+                {language === 'ur' ? 'ویڈیو آرکائیو جلد دستیاب ہوگا' : 'Video Archive In Preparation'}
+              </h3>
+              <p className={`text-stone-600 text-sm leading-relaxed ${language === 'ur' ? 'font-urdu' : ''}`}>
+                {language === 'ur'
+                  ? 'سراج الحق قریشی کے خطبات اور مشاعروں کی تاریخی ویڈیو ریکارڈنگز جلد ہی یہاں اپ لوڈ کی جائیں گی۔'
+                  : 'Historical video footage, lectures, and mushairas are currently being digitized and cataloged. They will appear here once added by the archive administrator.'}
+              </p>
+            </div>
+          ) : filteredVideos.length === 0 ? (
             <div className="text-center py-16 text-stone-500">
-              <Video className="w-10 h-10 mx-auto mb-3 text-stone-300" />
-              <p className={`text-sm ${language === 'ur' ? 'font-urdu' : ''}`}>
-                {language === 'ur' ? 'ابھی کوئی ویڈیو دستیاب نہیں ہے۔' : 'No videos available yet.'}
+              <p className="text-sm">
+                {language === 'ur' ? 'کوئی ویڈیو تلاش کے مطابق نہیں ملی۔' : 'No videos match your search criteria.'}
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {videos.map((item) => {
+              {filteredVideos.map((item) => {
                 const title = language === 'ur' ? item.title_ur : item.title_en;
                 const description = language === 'ur' ? item.description_ur : item.description_en;
                 const ytId = item.youtube_url ? extractYouTubeId(item.youtube_url) : null;
@@ -250,45 +307,38 @@ export default function VideosPage() {
                     </div>
 
                     {/* Card Body */}
-                    <div className="p-4 flex flex-col flex-1 gap-2">
+                    <div className="p-5 flex flex-col flex-1 gap-2">
                       <div className="flex items-start justify-between gap-2">
                         <h3 className={`text-base font-bold text-stone-900 leading-snug ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
                           {title}
                         </h3>
                         {item.duration && (
-                          <span className="shrink-0 text-[11px] font-medium text-stone-500 bg-stone-100 rounded px-1.5 py-0.5">
+                          <span className="shrink-0 text-[11px] font-medium text-stone-500 bg-stone-100 rounded px-2 py-0.5">
                             {item.duration}
                           </span>
                         )}
                       </div>
                       {description && (
-                        <p className={`text-sm text-stone-600 leading-relaxed line-clamp-2 ${language === 'ur' ? 'font-urdu' : ''}`}>
+                        <p className={`text-xs text-stone-600 leading-relaxed line-clamp-2 ${language === 'ur' ? 'font-urdu' : ''}`}>
                           {description}
                         </p>
                       )}
-                      <div className="mt-auto pt-2 flex items-center justify-between gap-2">
+                      <div className="mt-auto pt-3 flex items-center justify-between gap-2 border-t border-stone-100">
                         {item.category && (
-                          <span className="text-[11px] font-semibold text-amber-800 bg-amber-100 rounded-full px-2.5 py-1">
+                          <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 rounded-full px-2.5 py-0.5 border border-amber-200/50">
                             {item.category}
                           </span>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => handlePlayVideo(item)}
-                          className={`inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 hover:text-amber-900 transition-colors ${!isLocked && ytId ? 'invisible group-hover:visible' : ''}`}
-                        >
-                          {isLocked ? (
-                            <>
-                              <KeyRound className="w-3.5 h-3.5" />
-                              {language === 'ur' ? 'رسائی درخواست' : 'Request Access'}
-                            </>
-                          ) : (
-                            <>
-                              <Play className="w-3.5 h-3.5" />
-                              {language === 'ur' ? 'چلائیں' : 'Play'}
-                            </>
-                          )}
-                        </button>
+                        {isLocked && (
+                          <button
+                            type="button"
+                            onClick={() => handlePlayVideo(item)}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 hover:text-amber-900 transition-colors"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                            <span>{language === 'ur' ? 'رسائی درخواست' : 'Request Access'}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </article>
@@ -306,24 +356,24 @@ export default function VideosPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-sm animate-fade-in">
           <form
             onSubmit={handleDecryptSubmit}
-            className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-stone-200 p-6 sm:p-8 space-y-4"
+            className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 sm:p-8 space-y-4"
           >
             <button
               type="button"
               onClick={() => setDecryptModal(null)}
-              className="absolute top-5 right-5 p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+              className="absolute top-5 right-5 p-2 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="w-11 h-11 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center">
-              <KeyRound className="w-5 h-5" />
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center">
+              <KeyRound className="w-6 h-6" />
             </div>
             <div>
               <h2 className={`text-lg font-bold text-stone-900 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
                 {language === 'ur' ? 'خفیہ ویڈیو کھولیں' : 'Open Protected Video'}
               </h2>
-              <p className={`text-sm text-stone-600 mt-1 ${language === 'ur' ? 'font-urdu' : ''}`}>
+              <p className={`text-xs text-stone-600 mt-1 ${language === 'ur' ? 'font-urdu' : ''}`}>
                 {language === 'ur'
                   ? 'اس ویڈیو کو دیکھنے کے لیے خفیہ پاس ورڈ درج کریں۔'
                   : 'Enter the secret password to decrypt and watch this video.'}
@@ -335,10 +385,10 @@ export default function VideosPage() {
               onChange={(e) => setPassword(e.target.value)}
               autoFocus
               placeholder={language === 'ur' ? 'پاس ورڈ' : 'Password'}
-              className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-700/30"
+              className="w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
             />
             {decryptError && (
-              <p className={`text-xs text-red-600 ${language === 'ur' ? 'font-urdu' : ''}`}>{decryptError}</p>
+              <p className={`text-xs text-rose-600 ${language === 'ur' ? 'font-urdu' : ''}`}>{decryptError}</p>
             )}
             <div className="flex items-center justify-end gap-3 pt-1">
               <button
@@ -351,12 +401,12 @@ export default function VideosPage() {
               <button
                 type="submit"
                 disabled={!password || decrypting}
-                className="px-5 py-2 rounded-xl text-sm font-semibold bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-50 transition-colors inline-flex items-center gap-2"
+                className="px-5 py-2 rounded-xl text-sm font-semibold bg-amber-800 text-white hover:bg-amber-900 disabled:opacity-50 transition-colors inline-flex items-center gap-2"
               >
                 {decrypting && (
                   <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                 )}
-                {language === 'ur' ? 'چلائیں' : 'Play'}
+                <span>{language === 'ur' ? 'چلائیں' : 'Play'}</span>
               </button>
             </div>
           </form>

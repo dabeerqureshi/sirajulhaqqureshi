@@ -1,18 +1,39 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
 import GalleryGrid from '@/components/gallery/GalleryGrid';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import { useLanguage } from '@/context/LanguageContext';
 import { mockGallery } from '@/lib/data/mockData';
+import { GalleryItem } from '@/types/database';
+import { createClient } from '@/lib/supabase/client';
 import { Image as ImageIcon } from 'lucide-react';
 
 export default function GalleryPage() {
   const { language, t } = useLanguage();
+  const [items, setItems] = useState<GalleryItem[]>(mockGallery);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPhotoTitle, setSelectedPhotoTitle] = useState('');
+
+  useEffect(() => {
+    const loadGallery = async () => {
+      const supabase = createClient();
+      if (!supabase) return;
+
+      const { data, error } = await supabase
+        .from('gallery')
+        .select('*')
+        .order('sort_order', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        setItems(data);
+      }
+    };
+
+    loadGallery();
+  }, []);
 
   const handleRequestAccess = (title: string) => {
     setSelectedPhotoTitle(title);
@@ -36,14 +57,14 @@ export default function GalleryPage() {
             </h1>
             <p className={`text-stone-600 text-sm sm:text-base leading-relaxed ${language === 'ur' ? 'font-urdu' : ''}`}>
               {language === 'ur'
-                ? 'مشاعروں، علمی مجالس، خاندانی تقریبات اور نایاب مسودات کی یادگار تصاویر۔ کچھ نایاب تصاویر صرف مجاز صارفین کے لیے مخصوص ہیں۔'
-                : 'A visual documentation of historic mushairas, intellectual gatherings, and personal archives. Restricted historical photos require administrator authorization.'}
+                ? 'مشاعروں، علمی مجالس، خاندانی تقریبات اور نایاب مسودات کی یادگار تصاویر۔'
+                : 'A visual documentation of historic mushairas, intellectual gatherings, and personal archives.'}
             </p>
           </div>
 
           {/* Gallery with category filter and restricted handling */}
           <GalleryGrid
-            items={mockGallery}
+            items={items}
             onRequestAccess={handleRequestAccess}
           />
         </div>

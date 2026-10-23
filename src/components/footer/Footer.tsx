@@ -53,6 +53,11 @@ export default function Footer() {
                   {t('navGallery')}
                 </Link>
               </li>
+              <li>
+                <Link href="/videos" className="hover:text-amber-400 transition-colors">
+                  {t('navVideos')}
+                </Link>
+              </li>
             </ul>
           </div>
 
