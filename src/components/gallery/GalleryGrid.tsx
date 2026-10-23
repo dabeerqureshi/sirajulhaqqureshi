@@ -51,19 +51,26 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
               key={item.id}
               className="group relative bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-lg transition-all flex flex-col"
             >
-              {/* Image Frame */}
+              {/* Image Frame — Responsive to ANY aspect ratio/dimension without cropping */}
               <div
                 onClick={() => {
                   if (!isRestricted) setActivePhoto(item);
                 }}
-                className={`relative h-64 w-full overflow-hidden bg-stone-900 ${
+                className={`relative h-72 sm:h-80 w-full overflow-hidden bg-stone-950 flex items-center justify-center p-2.5 ${
                   !isRestricted ? 'cursor-pointer' : ''
                 }`}
               >
+                {/* Ambient backdrop matching image colors for seamless aesthetics */}
+                <div
+                  className="absolute inset-0 bg-cover bg-center filter blur-xl opacity-30 scale-110"
+                  style={{ backgroundImage: `url(${item.file_path})` }}
+                />
+
+                {/* Full, uncropped photograph */}
                 <img
                   src={item.file_path}
                   alt={item.title_en}
-                  className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${
+                  className={`relative z-10 max-h-full max-w-full w-auto h-auto object-contain rounded-lg drop-shadow-md transition-transform duration-500 group-hover:scale-[1.03] ${
                     isRestricted ? 'filter blur-md brightness-75 scale-105 select-none' : ''
                   }`}
                 />
@@ -71,7 +78,7 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
                 {/* Restricted overlay banner */}
                 {isRestricted ? (
                   <div
-                    className="absolute inset-0 bg-stone-950/50 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center text-white"
+                    className="absolute inset-0 z-20 bg-stone-950/60 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center text-white"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="w-12 h-12 rounded-full bg-rose-500/20 border border-rose-500/50 text-rose-300 flex items-center justify-center mb-3">
@@ -91,7 +98,7 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
                     </button>
                   </div>
                 ) : (
-                  <div className="absolute inset-0 bg-gradient-to-t from-stone-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                  <div className="absolute inset-0 z-20 bg-gradient-to-t from-stone-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4 pointer-events-none">
                     <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/90 text-stone-900 text-xs font-medium backdrop-blur-xs shadow-md">
                       <Eye className="w-3.5 h-3.5" />
                       <span>{language === 'ur' ? 'بڑا دیکھیں' : 'View Full Image'}</span>
@@ -132,7 +139,7 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
           onClick={() => setActivePhoto(null)}
         >
           <div
-            className="max-w-4xl w-full bg-stone-900 rounded-3xl overflow-hidden shadow-2xl border border-stone-800 relative flex flex-col"
+            className="max-w-5xl w-full bg-stone-900 rounded-3xl overflow-hidden shadow-2xl border border-stone-800 relative flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -143,7 +150,7 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
               <X className="w-5 h-5" />
             </button>
 
-            <div className="relative max-h-[75vh] bg-black flex items-center justify-center p-2">
+            <div className="relative max-h-[75vh] bg-black flex items-center justify-center p-3">
               <img
                 src={activePhoto.file_path}
                 alt={activePhoto.title_en}

@@ -12,11 +12,7 @@ import {
   Maximize2,
   Minimize2,
   ZoomIn,
-  ZoomOut,
-  FileText,
-  Bookmark,
-  Share2,
-  Sparkles
+  ZoomOut
 } from 'lucide-react';
 
 interface BookReaderModalProps {

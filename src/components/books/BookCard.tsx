@@ -43,7 +43,7 @@ export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCa
           <img
             src={book.cover_path}
             alt={book.title_en}
-            className="w-full h-full object-cover rounded-md shadow-md group-hover:scale-105 transition-transform duration-300"
+            className="max-w-full max-h-full object-contain rounded-md shadow-md group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
           <div className="text-center text-amber-100 p-4 border border-amber-800/40 rounded flex flex-col items-center justify-center h-full">

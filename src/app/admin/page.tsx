@@ -26,11 +26,11 @@ import {
   Play,
   Trash2,
   ExternalLink,
-  Plus,
   RefreshCw,
   Sparkles,
   Loader2,
   Pencil,
+  UploadCloud,
   X
 } from 'lucide-react';
 
@@ -57,6 +57,7 @@ export default function AdminPage() {
 
   // Edit Modal State
   const [editingItem, setEditingItem] = useState<EditingItem | null>(null);
+  const [editPhotoFile, setEditPhotoFile] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
 
   const showToast = (msg: string) => {
@@ -555,12 +556,13 @@ export default function AdminPage() {
         setVideosList((prev) => prev.map((v) => (v.id === item.id ? { ...v, ...updates } : v)));
         showToast('Video updated successfully in Supabase!');
       } else if (type === 'gallery') {
+        const filePath = (editPhotoFile || (formData.get('file_path') as string) || '').trim();
         const updates = {
           title_en: (formData.get('title_en') as string).trim(),
           title_ur: (formData.get('title_ur') as string).trim(),
           category: formData.get('category') as string,
           taken_date: (formData.get('taken_date') as string).trim() || null,
-          file_path: (formData.get('file_path') as string).trim(),
+          file_path: filePath,
           visibility: formData.get('visibility') as 'public' | 'restricted',
           description_en: (formData.get('description_en') as string).trim() || null,
           description_ur: (formData.get('description_ur') as string).trim() || null,
@@ -610,6 +612,7 @@ export default function AdminPage() {
         showToast('Book updated successfully in Supabase!');
       }
       setEditingItem(null);
+      setEditPhotoFile(null);
     } catch (err) {
       showToast(`Update failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -1367,22 +1370,32 @@ export default function AdminPage() {
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                       {galleryList.map((item) => (
-                        <div key={item.id} className="group relative rounded-xl overflow-hidden border border-stone-200 bg-stone-100 aspect-square">
+                        <div key={item.id} className="group relative rounded-xl overflow-hidden border border-stone-800 bg-stone-950 aspect-square flex items-center justify-center p-1.5 shadow-xs">
+                          {/* Ambient blurred backdrop so any aspect ratio (portrait/landscape/scan) fits elegantly */}
+                          <div
+                            className="absolute inset-0 bg-cover bg-center filter blur-md opacity-35 scale-125"
+                            style={{ backgroundImage: `url(${item.file_path})` }}
+                          />
                           <img
                             src={item.file_path}
                             alt={item.title_en}
-                            className="w-full h-full object-cover"
+                            className="relative z-10 max-w-full max-h-full object-contain transition-transform group-hover:scale-105"
                           />
-                          <div className="absolute inset-0 bg-stone-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 text-white">
+                          <div className="absolute inset-0 z-20 bg-stone-950/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 text-white">
                             <div className="flex items-center justify-end gap-1.5 self-end">
                               <button
-                                onClick={() => setEditingItem({ type: 'gallery', item })}
+                                type="button"
+                                onClick={() => {
+                                  setEditingItem({ type: 'gallery', item });
+                                  setEditPhotoFile(item.file_path);
+                                }}
                                 className="p-1 rounded-md bg-stone-900/90 hover:bg-amber-700 text-white transition-colors"
                                 title="Edit Photo"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
                               <button
+                                type="button"
                                 onClick={() => handleDeletePhoto(item.id)}
                                 className="p-1 rounded-md bg-rose-600/90 hover:bg-rose-600 text-white transition-colors"
                                 title="Delete Photo"
@@ -2060,6 +2073,51 @@ export default function AdminPage() {
                     </div>
                   </div>
 
+                  {/* Photo Preview & Live Image Replacement */}
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 uppercase mb-1.5">
+                      Photograph Preview & Replace
+                    </label>
+                    <div className="relative rounded-2xl overflow-hidden border border-stone-800 bg-stone-950 p-4 flex flex-col items-center justify-center min-h-[220px] shadow-inner">
+                      <div
+                        className="absolute inset-0 bg-cover bg-center filter blur-lg opacity-35 scale-125"
+                        style={{ backgroundImage: `url(${editPhotoFile || editingItem.item.file_path})` }}
+                      />
+                      <img
+                        src={editPhotoFile || editingItem.item.file_path}
+                        alt="Preview"
+                        className="relative z-10 max-h-60 max-w-full object-contain rounded-lg shadow-md"
+                      />
+                    </div>
+
+                    <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                      <label className="cursor-pointer inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold transition-colors shadow-xs">
+                        <UploadCloud className="w-4 h-4 text-amber-400" />
+                        <span>Upload Replacement Picture</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (uploadEvent) => {
+                                if (typeof uploadEvent.target?.result === 'string') {
+                                  setEditPhotoFile(uploadEvent.target.result);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                      <span className="text-[11px] text-stone-500">
+                        Supports any aspect ratio or dimension (portrait, landscape, tall scans) without cropping.
+                      </span>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
                       File Path / Image Source
@@ -2068,7 +2126,8 @@ export default function AdminPage() {
                       name="file_path"
                       type="text"
                       required
-                      defaultValue={editingItem.item.file_path}
+                      value={editPhotoFile || editingItem.item.file_path}
+                      onChange={(e) => setEditPhotoFile(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-mono text-xs"
                     />
                   </div>

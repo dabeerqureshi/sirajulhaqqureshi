@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useLanguage } from '@/context/LanguageContext';
-import { Shield, Menu, X, Globe } from 'lucide-react';
+import { Menu, X, Globe } from 'lucide-react';
 
 export default function Navbar() {
   const { language, setLanguage, t } = useLanguage();
@@ -68,21 +68,12 @@ export default function Navbar() {
             {/* Language Switcher */}
             <button
               onClick={toggleLanguage}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 text-xs font-semibold shadow-xs transition-all hover:border-amber-500"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 text-xs font-semibold shadow-xs transition-all hover:border-amber-500"
               title="Switch Language"
             >
               <Globe className="w-3.5 h-3.5 text-amber-700" />
               <span>{language === 'en' ? 'اردو' : 'English'}</span>
             </button>
-
-            {/* Admin Portal Link */}
-            <Link
-              href="/admin"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-stone-900 text-stone-100 hover:bg-stone-800 text-xs font-medium shadow-xs transition-all"
-            >
-              <Shield className="w-3.5 h-3.5 text-amber-400" />
-              <span>{t('navAdmin')}</span>
-            </Link>
           </div>
 
           {/* Mobile Menu Toggle */}
@@ -122,16 +113,6 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
-          <div className="pt-4 border-t border-stone-100">
-            <Link
-              href="/admin"
-              onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-md bg-stone-900 text-stone-100 font-medium text-sm"
-            >
-              <Shield className="w-4 h-4 text-amber-400" />
-              <span>{t('navAdmin')}</span>
-            </Link>
-          </div>
         </div>
       )}
     </header>

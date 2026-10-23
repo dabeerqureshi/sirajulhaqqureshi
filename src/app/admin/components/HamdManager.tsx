@@ -49,6 +49,7 @@ export default function HamdManager({ onToast }: Props) {
   const [updatingHamd, setUpdatingHamd] = useState(false);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     const { items: rows, error } = await getHamdItems();
     setListError(error);
     setItems(rows);
@@ -56,8 +57,20 @@ export default function HamdManager({ onToast }: Props) {
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    let cancelled = false;
+    const loadInitial = async () => {
+      const { items: rows, error } = await getHamdItems();
+      if (!cancelled) {
+        setListError(error);
+        setItems(rows);
+        setLoading(false);
+      }
+    };
+    void loadInitial();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const pickFile = (file: File | null | undefined) => {
     setFileError(null);

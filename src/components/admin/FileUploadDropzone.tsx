@@ -106,8 +106,8 @@ export default function FileUploadDropzone({
         <div className="relative p-4 rounded-xl border border-stone-200 bg-stone-50/80 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 overflow-hidden">
             {isImage ? (
-              <div className="w-16 h-16 rounded-lg overflow-hidden border border-stone-200 shrink-0 bg-stone-900">
-                <img src={value} alt="Preview" className="w-full h-full object-cover" />
+              <div className="w-16 h-16 rounded-lg overflow-hidden border border-stone-800 shrink-0 bg-stone-950 flex items-center justify-center p-0.5">
+                <img src={value} alt="Preview" className="max-w-full max-h-full object-contain" />
               </div>
             ) : isPdf ? (
               <div className="w-16 h-16 rounded-lg bg-rose-100 text-rose-700 flex flex-col items-center justify-center shrink-0 border border-rose-200">

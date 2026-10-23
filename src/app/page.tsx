@@ -13,7 +13,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { BookItem, ContentItem, GalleryItem } from '@/types/database';
 import { mockIntro, mockBiography, mockGallery } from '@/lib/data/mockData';
 import { createClient } from '@/lib/supabase/client';
-import { Feather, BookOpen, ArrowRight, Sparkles, ScrollText } from 'lucide-react';
+import { Feather, ArrowRight, Sparkles, ScrollText } from 'lucide-react';
 
 export default function HomePage() {
   const { language, t } = useLanguage();
@@ -171,11 +171,15 @@ export default function HomePage() {
               </div>
             </div>
             <div className="lg:col-span-4">
-              <div className="rounded-2xl overflow-hidden border border-stone-200 shadow-md">
+              <div className="relative h-72 sm:h-80 rounded-2xl overflow-hidden border border-stone-800 bg-stone-950 flex items-center justify-center p-2 shadow-md">
+                <div
+                  className="absolute inset-0 bg-cover bg-center filter blur-md opacity-35 scale-125"
+                  style={{ backgroundImage: `url(${mockBiography.cover_image || '/gallery/siraj-04.jpg'})` }}
+                />
                 <img
                   src={mockBiography.cover_image || '/gallery/siraj-04.jpg'}
                   alt="Siraj ul Haq Qureshi Formal Portrait"
-                  className="w-full h-72 object-cover object-top"
+                  className="relative z-10 max-h-full max-w-full object-contain rounded-lg"
                 />
               </div>
             </div>

@@ -68,17 +68,9 @@ export default function Footer() {
             </h4>
             <p className={`text-xs text-stone-400 leading-relaxed ${language === 'ur' ? 'font-urdu' : ''}`}>
               {language === 'ur'
-                ? 'نایاب اور غیر مطبوعہ کتب و تصاویر تک رسائی کے لیے ایڈمن سے باضابطہ تصدیق درکار ہے۔'
-                : 'Restricted historical materials and private manuscripts are guarded with Supabase RLS and temporary signed tokens.'}
+                ? 'نایاب اور غیر مطبوعہ کتب و تصاویر تک رسائی کے لیے باضابطہ تصدیق درکار ہے۔'
+                : 'Restricted historical materials and private manuscripts are guarded with Supabase Row Level Security and signed tokens.'}
             </p>
-            <div className="pt-2">
-              <Link
-                href="/admin"
-                className="inline-block text-xs text-amber-400 hover:text-amber-300 font-medium underline underline-offset-4"
-              >
-                {t('navAdmin')} &rarr;
-              </Link>
-            </div>
           </div>
         </div>
 

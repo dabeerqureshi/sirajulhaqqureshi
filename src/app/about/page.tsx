@@ -60,11 +60,15 @@ export default function AboutPage() {
           </div>
 
           {/* Portrait Banner */}
-          <div className="rounded-3xl overflow-hidden shadow-xl border border-stone-200">
+          <div className="relative rounded-3xl overflow-hidden shadow-xl border border-stone-800 bg-stone-950 flex items-center justify-center p-3 h-80 sm:h-96">
+            <div
+              className="absolute inset-0 bg-cover bg-center filter blur-md opacity-35 scale-125"
+              style={{ backgroundImage: `url(${mockBiography.cover_image || ''})` }}
+            />
             <img
               src={mockBiography.cover_image || ''}
               alt="Siraj ul Haq Qureshi Archives"
-              className="w-full h-80 sm:h-96 object-cover"
+              className="relative z-10 max-h-full max-w-full object-contain rounded-xl shadow-md"
             />
           </div>
 
