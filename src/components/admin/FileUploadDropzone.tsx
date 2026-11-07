@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import Image from 'next/image';
 import { UploadCloud, FileText, X, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface FileUploadDropzoneProps {
@@ -104,7 +105,7 @@ export default function FileUploadDropzone({
           <div className="flex items-center gap-3 overflow-hidden">
             {isImage ? (
               <div className="w-16 h-16 rounded-lg overflow-hidden border border-stone-800 shrink-0 bg-stone-950 flex items-center justify-center p-0.5">
-                <img src={value} alt="Preview" className="max-w-full max-h-full object-contain" />
+                <Image src={value} alt="Preview" width={64} height={64} unoptimized className="max-w-full max-h-full object-contain" />
               </div>
             ) : isPdf ? (
               <div className="w-16 h-16 rounded-lg bg-rose-100 text-rose-700 flex flex-col items-center justify-center shrink-0 border border-rose-200">

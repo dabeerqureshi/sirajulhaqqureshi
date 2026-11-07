@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { GalleryItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
 import { getStorageUrl } from '@/lib/supabase/storage';
@@ -78,12 +79,15 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
                 />
 
                 {/* Full, uncropped photograph */}
-                <img
+                <Image
                   src={resolvedPhotoUrl}
                   alt={item.title_en}
+                  width={600}
+                  height={450}
                   className={`relative z-10 max-h-full max-w-full w-auto h-auto object-contain rounded-lg drop-shadow-md transition-transform duration-500 group-hover:scale-[1.03] ${
                     isRestricted ? 'filter blur-md brightness-75 scale-105 select-none' : ''
                   }`}
+                  unoptimized={resolvedPhotoUrl.startsWith('data:')}
                 />
 
                 {/* Restricted overlay banner */}
@@ -163,10 +167,13 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
             </button>
 
             <div className="relative max-h-[75vh] bg-black flex items-center justify-center p-3">
-              <img
+              <Image
                 src={getStorageUrl(activePhoto.file_path)}
                 alt={activePhoto.title_en}
+                width={1200}
+                height={800}
                 className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg"
+                unoptimized={getStorageUrl(activePhoto.file_path).startsWith('data:')}
               />
             </div>
             <div className="p-6 bg-stone-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-stone-800">

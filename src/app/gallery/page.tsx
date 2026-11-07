@@ -13,23 +13,31 @@ import { Image as ImageIcon } from 'lucide-react';
 
 export default function GalleryPage() {
   const { language, t } = useLanguage();
-  const [items, setItems] = useState<GalleryItem[]>(mockGallery);
+  const [items, setItems] = useState<GalleryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPhotoTitle, setSelectedPhotoTitle] = useState('');
 
   useEffect(() => {
     const loadGallery = async () => {
       const supabase = createClient();
-      if (!supabase) return;
+      if (!supabase) {
+        setItems(mockGallery);
+        setLoading(false);
+        return;
+      }
 
       const { data, error } = await supabase
         .from('gallery')
         .select('*')
         .order('sort_order', { ascending: true });
 
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         setItems(data);
+      } else {
+        setItems(mockGallery);
       }
+      setLoading(false);
     };
 
     loadGallery();
@@ -63,10 +71,18 @@ export default function GalleryPage() {
           </div>
 
           {/* Gallery with category filter and restricted handling */}
-          <GalleryGrid
-            items={items}
-            onRequestAccess={handleRequestAccess}
-          />
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 animate-pulse" aria-busy="true">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-64 rounded-2xl bg-stone-200/80 border border-stone-200" />
+              ))}
+            </div>
+          ) : (
+            <GalleryGrid
+              items={items}
+              onRequestAccess={handleRequestAccess}
+            />
+          )}
         </div>
       </main>
 

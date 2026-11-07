@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
 import PoetryCard from '@/components/poetry/PoetryCard';
@@ -13,6 +14,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { BookItem, ContentItem, GalleryItem } from '@/types/database';
 import { mockIntro, mockBiography } from '@/lib/data/mockData';
 import { createClient } from '@/lib/supabase/client';
+import { getStorageUrl } from '@/lib/supabase/storage';
 import { Feather, ArrowRight, Sparkles, ScrollText } from 'lucide-react';
 
 export default function HomePage() {
@@ -21,6 +23,8 @@ export default function HomePage() {
   const [selectedItemTitle, setSelectedItemTitle] = useState('');
   const [activeReadingBook, setActiveReadingBook] = useState<BookItem | null>(null);
 
+  const [intro, setIntro] = useState(mockIntro);
+  const [bio, setBio] = useState(mockBiography);
   const [poetry, setPoetry] = useState<ContentItem[]>([]);
   const [books, setBooks] = useState<BookItem[]>([]);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
@@ -30,7 +34,7 @@ export default function HomePage() {
       const supabase = createClient();
       if (!supabase) return;
 
-      const [poemsRes, booksRes, galleryRes] = await Promise.all([
+      const [poemsRes, booksRes, galleryRes, introRes, bioRes] = await Promise.all([
         supabase
           .from('content')
           .select('*')
@@ -49,6 +53,16 @@ export default function HomePage() {
           .select('*')
           .order('sort_order', { ascending: true })
           .limit(3),
+        supabase
+          .from('content')
+          .select('*')
+          .eq('type', 'intro')
+          .maybeSingle(),
+        supabase
+          .from('content')
+          .select('*')
+          .eq('type', 'biography')
+          .maybeSingle(),
       ]);
 
       if (poemsRes.data && poemsRes.data.length > 0) {
@@ -59,6 +73,32 @@ export default function HomePage() {
       }
       if (galleryRes.data && galleryRes.data.length > 0) {
         setGallery(galleryRes.data);
+      }
+      if (introRes.data) {
+        setIntro({
+          ...mockIntro,
+          ...introRes.data,
+          title_en: introRes.data.title_en || mockIntro.title_en,
+          title_ur: introRes.data.title_ur || mockIntro.title_ur,
+          subtitle_en: introRes.data.subtitle_en || mockIntro.subtitle_en,
+          subtitle_ur: introRes.data.subtitle_ur || mockIntro.subtitle_ur,
+          body_en: introRes.data.body_en || mockIntro.body_en,
+          body_ur: introRes.data.body_ur || mockIntro.body_ur,
+          cover_image: introRes.data.cover_image ? getStorageUrl(introRes.data.cover_image) : mockIntro.cover_image,
+        });
+      }
+      if (bioRes.data) {
+        setBio({
+          ...mockBiography,
+          ...bioRes.data,
+          title_en: bioRes.data.title_en || mockBiography.title_en,
+          title_ur: bioRes.data.title_ur || mockBiography.title_ur,
+          subtitle_en: bioRes.data.subtitle_en || mockBiography.subtitle_en,
+          subtitle_ur: bioRes.data.subtitle_ur || mockBiography.subtitle_ur,
+          body_en: bioRes.data.body_en || mockBiography.body_en,
+          body_ur: bioRes.data.body_ur || mockBiography.body_ur,
+          cover_image: bioRes.data.cover_image ? getStorageUrl(bioRes.data.cover_image) : mockBiography.cover_image,
+        });
       }
     };
 
@@ -93,15 +133,15 @@ export default function HomePage() {
                 </div>
 
                 <h1 className={`text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-tight ${language === 'ur' ? 'font-urdu leading-normal' : 'font-serif'}`}>
-                  {language === 'ur' ? mockIntro.title_ur : mockIntro.title_en}
+                  {language === 'ur' ? intro.title_ur : intro.title_en}
                 </h1>
 
                 <p className={`text-lg sm:text-xl text-amber-200/90 font-medium ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
-                  {language === 'ur' ? mockIntro.subtitle_ur : mockIntro.subtitle_en}
+                  {language === 'ur' ? intro.subtitle_ur : intro.subtitle_en}
                 </p>
 
                 <p className={`text-sm sm:text-base text-stone-300 leading-relaxed max-w-2xl ${language === 'ur' ? 'font-urdu' : ''}`}>
-                  {language === 'ur' ? mockIntro.body_ur : mockIntro.body_en}
+                  {language === 'ur' ? intro.body_ur : intro.body_en}
                 </p>
 
                 <div className="pt-4 flex flex-wrap items-center gap-4">
@@ -126,11 +166,15 @@ export default function HomePage() {
               {/* Portrait / Visual Card */}
               <div className="lg:col-span-5 flex justify-center">
                 <div className="relative w-full max-w-md rounded-3xl p-3 bg-black border border-stone-800 shadow-2xl">
-                  <div className="aspect-4/5 rounded-2xl overflow-hidden relative shadow-inner bg-black">
-                    <img
-                      src={mockIntro.cover_image || ''}
+                  <div className="aspect-4/5 rounded-2xl overflow-hidden relative shadow-inner bg-black flex items-center justify-center">
+                    <Image
+                      src={intro.cover_image || '/gallery/siraj-profile.jpg'}
                       alt="Siraj ul Haq Qureshi"
+                      width={500}
+                      height={625}
+                      priority
                       className="w-full h-full object-contain object-center filter brightness-95 contrast-105"
+                      unoptimized={!!intro.cover_image?.startsWith('data:')}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-transparent to-transparent"></div>
                     <div className="absolute bottom-5 inset-x-5 text-center">
@@ -155,10 +199,10 @@ export default function HomePage() {
                 {language === 'ur' ? 'تعارف و سوانح' : 'Legacy & Life'}
               </span>
               <h2 className={`text-2xl sm:text-3xl font-bold text-stone-900 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
-                {language === 'ur' ? mockBiography.title_ur : mockBiography.title_en}
+                {language === 'ur' ? bio.title_ur : bio.title_en}
               </h2>
               <p className={`text-sm sm:text-base text-stone-600 leading-relaxed ${language === 'ur' ? 'font-urdu' : ''}`}>
-                {language === 'ur' ? mockBiography.body_ur : mockBiography.body_en}
+                {language === 'ur' ? bio.body_ur : bio.body_en}
               </p>
               <div className="pt-2">
                 <Link
@@ -174,12 +218,15 @@ export default function HomePage() {
               <div className="relative h-72 sm:h-80 rounded-2xl overflow-hidden border border-stone-800 bg-stone-950 flex items-center justify-center p-2 shadow-md">
                 <div
                   className="absolute inset-0 bg-cover bg-center filter blur-md opacity-35 scale-125"
-                  style={{ backgroundImage: `url(${mockBiography.cover_image || '/gallery/siraj-profile.jpg'})` }}
+                  style={{ backgroundImage: `url(${bio.cover_image || '/gallery/siraj-profile.jpg'})` }}
                 />
-                <img
-                  src={mockBiography.cover_image || '/gallery/siraj-profile.jpg'}
+                <Image
+                  src={bio.cover_image || '/gallery/siraj-profile.jpg'}
                   alt="Siraj ul Haq Qureshi Formal Portrait"
+                  width={400}
+                  height={400}
                   className="relative z-10 max-h-full max-w-full object-contain rounded-lg"
+                  unoptimized={!!bio.cover_image?.startsWith('data:')}
                 />
               </div>
             </div>

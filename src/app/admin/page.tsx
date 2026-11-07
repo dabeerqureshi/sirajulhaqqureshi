@@ -1,15 +1,18 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
 import FileUploadDropzone from '@/components/admin/FileUploadDropzone';
 import HamdManager from '@/app/admin/components/HamdManager';
-import { AccessRequest, BookItem, ContentItem, GalleryItem, VideoItem } from '@/types/database';
+import { AccessRequest, BookItem, ContentItem, GalleryItem, VideoItem, AuditLogItem } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
 import AutoTranslateButton from '@/components/admin/AutoTranslateButton';
 import { autoTranslatePair } from '@/lib/translate';
+import { extractStoragePath } from '@/lib/supabase/storage';
+import { recordAuditLog } from '@/lib/supabase/audit';
 import {
   ShieldCheck,
   Lock,
@@ -32,7 +35,9 @@ import {
   Loader2,
   Pencil,
   UploadCloud,
-  X
+  X,
+  ScrollText,
+  History,
 } from 'lucide-react';
 
 type EditingItem =
@@ -43,7 +48,7 @@ type EditingItem =
 
 export default function AdminPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'requests' | 'videos' | 'gallery' | 'poetry' | 'hamd' | 'books'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'videos' | 'gallery' | 'poetry' | 'hamd' | 'books' | 'biography' | 'audit'>('requests');
 
   // Supabase Database State
   const [requests, setRequests] = useState<AccessRequest[]>([]);
@@ -51,6 +56,24 @@ export default function AdminPage() {
   const [booksList, setBooksList] = useState<BookItem[]>([]);
   const [poetryList, setPoetryList] = useState<ContentItem[]>([]);
   const [galleryList, setGalleryList] = useState<GalleryItem[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+
+  // Biography & Intro state
+  const [bioTitleEn, setBioTitleEn] = useState('Siraj ul Haq Qureshi');
+  const [bioTitleUr, setBioTitleUr] = useState('سراج الحق قریشی');
+  const [bioSubtitleEn, setBioSubtitleEn] = useState('A Lifetime of Intellect, Poetic Elevation & Eastern Philosophy');
+  const [bioSubtitleUr, setBioSubtitleUr] = useState('علم و ادب، فکری بصیرت اور شعری نغمگی کا نایاب امتزاج');
+  const [bioBodyEn, setBioBodyEn] = useState('');
+  const [bioBodyUr, setBioBodyUr] = useState('');
+  const [bioCoverImage, setBioCoverImage] = useState<string | null>(null);
+
+  const [introTitleEn, setIntroTitleEn] = useState('Siraj ul Haq Qureshi');
+  const [introTitleUr, setIntroTitleUr] = useState('سراج الحق قریشی');
+  const [introSubtitleEn, setIntroSubtitleEn] = useState('Digital Archive & Literary Portfolio');
+  const [introSubtitleUr, setIntroSubtitleUr] = useState('ڈیجیٹل آرکائیو اور ادبی ورثہ');
+  const [introBodyEn, setIntroBodyEn] = useState('');
+  const [introBodyUr, setIntroBodyUr] = useState('');
+  const [introCoverImage, setIntroCoverImage] = useState<string | null>(null);
 
   const [loadingData, setLoadingData] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,12 +100,15 @@ export default function AdminPage() {
 
     setLoadingData(true);
     try {
-      const [reqRes, vidRes, bookRes, poetRes, galRes] = await Promise.all([
+      const [reqRes, vidRes, bookRes, poetRes, galRes, auditRes, bioRes, introRes] = await Promise.all([
         supabase.from('access_requests').select('*').order('requested_at', { ascending: false }),
         supabase.from('videos').select('*').order('sort_order', { ascending: true }),
         supabase.from('books').select('*').order('created_at', { ascending: false }),
         supabase.from('content').select('*').eq('type', 'poetry').order('created_at', { ascending: false }),
         supabase.from('gallery').select('*').order('sort_order', { ascending: true }),
+        supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(50),
+        supabase.from('content').select('*').eq('type', 'biography').maybeSingle(),
+        supabase.from('content').select('*').eq('type', 'intro').maybeSingle(),
       ]);
 
       if (reqRes.data) setRequests(reqRes.data);
@@ -90,6 +116,25 @@ export default function AdminPage() {
       if (bookRes.data) setBooksList(bookRes.data);
       if (poetRes.data) setPoetryList(poetRes.data);
       if (galRes.data) setGalleryList(galRes.data);
+      if (auditRes.data) setAuditLogs(auditRes.data as AuditLogItem[]);
+      if (bioRes.data) {
+        if (bioRes.data.title_en) setBioTitleEn(bioRes.data.title_en);
+        if (bioRes.data.title_ur) setBioTitleUr(bioRes.data.title_ur);
+        if (bioRes.data.subtitle_en) setBioSubtitleEn(bioRes.data.subtitle_en);
+        if (bioRes.data.subtitle_ur) setBioSubtitleUr(bioRes.data.subtitle_ur);
+        if (bioRes.data.body_en) setBioBodyEn(bioRes.data.body_en);
+        if (bioRes.data.body_ur) setBioBodyUr(bioRes.data.body_ur);
+        if (bioRes.data.cover_image) setBioCoverImage(bioRes.data.cover_image);
+      }
+      if (introRes.data) {
+        if (introRes.data.title_en) setIntroTitleEn(introRes.data.title_en);
+        if (introRes.data.title_ur) setIntroTitleUr(introRes.data.title_ur);
+        if (introRes.data.subtitle_en) setIntroSubtitleEn(introRes.data.subtitle_en);
+        if (introRes.data.subtitle_ur) setIntroSubtitleUr(introRes.data.subtitle_ur);
+        if (introRes.data.body_en) setIntroBodyEn(introRes.data.body_en);
+        if (introRes.data.body_ur) setIntroBodyUr(introRes.data.body_ur);
+        if (introRes.data.cover_image) setIntroCoverImage(introRes.data.cover_image);
+      }
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
@@ -176,6 +221,7 @@ export default function AdminPage() {
         prev.map((req) => (req.id === id ? { ...req, status: newStatus } : req))
       );
       showToast(`Access request marked as ${newStatus.toUpperCase()}`);
+      await recordAuditLog(newStatus === 'approved' ? 'approve' : 'reject', 'access_request', id, { userId });
     } catch (err) {
       showToast(`Error updating request: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
@@ -190,6 +236,7 @@ export default function AdminPage() {
     if (!error) {
       setRequests((prev) => prev.filter((r) => r.id !== id));
       showToast('Access request deleted.');
+      await recordAuditLog('delete', 'access_request', id);
     }
   };
 
@@ -271,10 +318,12 @@ export default function AdminPage() {
     const supabase = createClient();
     if (!supabase) return;
 
+    const target = videosList.find((v) => v.id === id);
     const { error } = await supabase.from('videos').delete().eq('id', id);
     if (!error) {
       setVideosList((prev) => prev.filter((v) => v.id !== id));
       showToast('Video deleted.');
+      await recordAuditLog('delete', 'video', id, { title: target?.title_en });
     } else {
       showToast(`Error deleting video: ${error.message}`);
     }
@@ -370,14 +419,23 @@ export default function AdminPage() {
   };
 
   const handleDeletePhoto = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this photo from the gallery?')) return;
+    if (!confirm('Are you sure you want to delete this photo from the gallery? Associated storage files will also be removed.')) return;
     const supabase = createClient();
     if (!supabase) return;
+
+    const target = galleryList.find((g) => g.id === id);
+    if (target?.file_path) {
+      const storagePath = extractStoragePath(target.file_path, 'public-assets');
+      if (storagePath) {
+        await supabase.storage.from('public-assets').remove([storagePath]);
+      }
+    }
 
     const { error } = await supabase.from('gallery').delete().eq('id', id);
     if (!error) {
       setGalleryList((prev) => prev.filter((p) => p.id !== id));
-      showToast('Photograph deleted.');
+      showToast('Photograph and associated storage files deleted.');
+      await recordAuditLog('delete', 'gallery', id, { title: target?.title_en });
     } else {
       showToast(`Error deleting photo: ${error.message}`);
     }
@@ -494,14 +552,25 @@ export default function AdminPage() {
   };
 
   const handleDeletePoem = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this poem?')) return;
+    if (!confirm('Are you sure you want to delete this poem? Associated manuscripts and covers will also be removed.')) return;
     const supabase = createClient();
     if (!supabase) return;
+
+    const target = poetryList.find((p) => p.id === id);
+    if (target?.file_path) {
+      const p = extractStoragePath(target.file_path, 'public-assets');
+      if (p) await supabase.storage.from('public-assets').remove([p]);
+    }
+    if (target?.cover_image) {
+      const c = extractStoragePath(target.cover_image, 'public-assets');
+      if (c) await supabase.storage.from('public-assets').remove([c]);
+    }
 
     const { error } = await supabase.from('content').delete().eq('id', id);
     if (!error) {
       setPoetryList((prev) => prev.filter((p) => p.id !== id));
-      showToast('Poem deleted.');
+      showToast('Poem and files deleted.');
+      await recordAuditLog('delete', 'poetry', id, { title: target?.title_en });
     } else {
       showToast(`Error deleting poem: ${error.message}`);
     }
@@ -614,14 +683,25 @@ export default function AdminPage() {
   };
 
   const handleDeleteBook = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this book?')) return;
+    if (!confirm('Are you sure you want to delete this book? Associated PDF and cover files will also be removed.')) return;
     const supabase = createClient();
     if (!supabase) return;
+
+    const target = booksList.find((b) => b.id === id);
+    if (target?.file_path) {
+      const p = extractStoragePath(target.file_path, 'public-assets');
+      if (p) await supabase.storage.from('public-assets').remove([p]);
+    }
+    if (target?.cover_path) {
+      const c = extractStoragePath(target.cover_path, 'public-assets');
+      if (c) await supabase.storage.from('public-assets').remove([c]);
+    }
 
     const { error } = await supabase.from('books').delete().eq('id', id);
     if (!error) {
       setBooksList((prev) => prev.filter((b) => b.id !== id));
-      showToast('Book deleted.');
+      showToast('Book and associated files deleted.');
+      await recordAuditLog('delete', 'book', id, { title: target?.title_en });
     } else {
       showToast(`Error deleting book: ${error.message}`);
     }
@@ -722,6 +802,121 @@ export default function AdminPage() {
       showToast(`Update failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setUpdating(false);
+    }
+  };
+
+  // ==========================================
+  // BIOGRAPHY & SITE INTRO HANDLERS
+  // ==========================================
+  const handleSaveBiography = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const supabase = createClient();
+      if (!supabase) throw new Error('Supabase client unavailable');
+
+      const { en: finalTitleEn, ur: finalTitleUr } = await autoTranslatePair(bioTitleEn, bioTitleUr);
+      const { en: finalSubEn, ur: finalSubUr } = await autoTranslatePair(bioSubtitleEn, bioSubtitleUr);
+      const { en: finalBodyEn, ur: finalBodyUr } = await autoTranslatePair(bioBodyEn, bioBodyUr);
+
+      const { data: existing } = await supabase
+        .from('content')
+        .select('id')
+        .eq('type', 'biography')
+        .maybeSingle();
+
+      const payload = {
+        type: 'biography',
+        title_en: finalTitleEn || 'Siraj ul Haq Qureshi',
+        title_ur: finalTitleUr || 'سراج الحق قریشی',
+        subtitle_en: finalSubEn || null,
+        subtitle_ur: finalSubUr || null,
+        body_en: finalBodyEn || null,
+        body_ur: finalBodyUr || null,
+        cover_image: bioCoverImage || null,
+        published: true,
+        visibility: 'public',
+        sort_order: 0,
+      };
+
+      if (existing?.id) {
+        const { error } = await supabase.from('content').update(payload).eq('id', existing.id);
+        if (error) throw error;
+        await recordAuditLog('update', 'poetry', existing.id, { section: 'biography' });
+      } else {
+        const { data: inserted, error } = await supabase.from('content').insert([payload]).select().single();
+        if (error) throw error;
+        if (inserted) await recordAuditLog('create', 'poetry', inserted.id, { section: 'biography' });
+      }
+
+      setBioTitleEn(finalTitleEn);
+      setBioTitleUr(finalTitleUr);
+      setBioSubtitleEn(finalSubEn);
+      setBioSubtitleUr(finalSubUr);
+      setBioBodyEn(finalBodyEn);
+      setBioBodyUr(finalBodyUr);
+
+      showToast('Biography updated successfully!');
+    } catch (err) {
+      showToast(`Error updating biography: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveIntro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const supabase = createClient();
+      if (!supabase) throw new Error('Supabase client unavailable');
+
+      const { en: finalTitleEn, ur: finalTitleUr } = await autoTranslatePair(introTitleEn, introTitleUr);
+      const { en: finalSubEn, ur: finalSubUr } = await autoTranslatePair(introSubtitleEn, introSubtitleUr);
+      const { en: finalBodyEn, ur: finalBodyUr } = await autoTranslatePair(introBodyEn, introBodyUr);
+
+      const { data: existing } = await supabase
+        .from('content')
+        .select('id')
+        .eq('type', 'intro')
+        .maybeSingle();
+
+      const payload = {
+        type: 'intro',
+        title_en: finalTitleEn || 'Siraj ul Haq Qureshi',
+        title_ur: finalTitleUr || 'سراج الحق قریشی',
+        subtitle_en: finalSubEn || null,
+        subtitle_ur: finalSubUr || null,
+        body_en: finalBodyEn || null,
+        body_ur: finalBodyUr || null,
+        cover_image: introCoverImage || null,
+        published: true,
+        visibility: 'public',
+        sort_order: 0,
+      };
+
+      if (existing?.id) {
+        const { error } = await supabase.from('content').update(payload).eq('id', existing.id);
+        if (error) throw error;
+        await recordAuditLog('update', 'poetry', existing.id, { section: 'intro' });
+      } else {
+        const { data: inserted, error } = await supabase.from('content').insert([payload]).select().single();
+        if (error) throw error;
+        if (inserted) await recordAuditLog('create', 'poetry', inserted.id, { section: 'intro' });
+      }
+
+      setIntroTitleEn(finalTitleEn);
+      setIntroTitleUr(finalTitleUr);
+      setIntroSubtitleEn(finalSubEn);
+      setIntroSubtitleUr(finalSubUr);
+      setIntroBodyEn(finalBodyEn);
+      setIntroBodyUr(finalBodyUr);
+
+      showToast('Homepage Archive Intro updated successfully!');
+    } catch (err) {
+      showToast(`Error updating intro: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -967,6 +1162,33 @@ export default function AdminPage() {
                 {booksList.length}
               </span>
             </button>
+
+            <button
+              onClick={() => setActiveTab('biography')}
+              className={`flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab === 'biography'
+                  ? 'border-amber-800 text-amber-900'
+                  : 'border-transparent text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              <ScrollText className="w-4 h-4" />
+              <span>Biography & Intro</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('audit')}
+              className={`flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab === 'audit'
+                  ? 'border-amber-800 text-amber-900'
+                  : 'border-transparent text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              <span>Audit Logs</span>
+              <span className="px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-600 text-xs font-semibold">
+                {auditLogs.length}
+              </span>
+            </button>
           </div>
 
           {/* MAIN TAB CONTENT CONTAINER */}
@@ -989,6 +1211,318 @@ export default function AdminPage() {
               </span>
             </div>
             
+            {/* ======================================================== */}
+            {/* TAB: BIOGRAPHY & ARCHIVE INTRO CMS                       */}
+            {/* ======================================================== */}
+            {activeTab === 'biography' && (
+              <div className="space-y-10">
+                {/* 1. Main Biography Settings */}
+                <form onSubmit={handleSaveBiography} className="space-y-6 border border-stone-200 rounded-2xl p-6 bg-stone-50/50">
+                  <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+                    <div>
+                      <h4 className="text-base font-bold text-stone-900 font-serif">Biography Content (/about page)</h4>
+                      <p className="text-xs text-stone-500">Manage the official biographical narrative, intellectual lineage, and portrait.</p>
+                    </div>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900">Live CMS</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">Title (English)</label>
+                        <AutoTranslateButton sourceText={bioTitleEn} targetLang="ur" onTranslated={setBioTitleUr} />
+                      </div>
+                      <input
+                        type="text"
+                        value={bioTitleEn}
+                        onChange={(e) => setBioTitleEn(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-amber-500"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">عنوان (اردو)</label>
+                        <AutoTranslateButton sourceText={bioTitleUr} targetLang="en" onTranslated={setBioTitleEn} />
+                      </div>
+                      <input
+                        type="text"
+                        dir="rtl"
+                        value={bioTitleUr}
+                        onChange={(e) => setBioTitleUr(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu focus:ring-2 focus:ring-amber-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">Subtitle (English)</label>
+                        <AutoTranslateButton sourceText={bioSubtitleEn} targetLang="ur" onTranslated={setBioSubtitleUr} />
+                      </div>
+                      <input
+                        type="text"
+                        value={bioSubtitleEn}
+                        onChange={(e) => setBioSubtitleEn(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">ذیلی عنوان (اردو)</label>
+                        <AutoTranslateButton sourceText={bioSubtitleUr} targetLang="en" onTranslated={setBioSubtitleEn} />
+                      </div>
+                      <input
+                        type="text"
+                        dir="rtl"
+                        value={bioSubtitleUr}
+                        onChange={(e) => setBioSubtitleUr(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">Detailed Narrative (English)</label>
+                        <AutoTranslateButton sourceText={bioBodyEn} targetLang="ur" onTranslated={setBioBodyUr} />
+                      </div>
+                      <textarea
+                        rows={6}
+                        value={bioBodyEn}
+                        onChange={(e) => setBioBodyEn(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-amber-500"
+                        placeholder="Detailed literary biography..."
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">سوانحی بیان (اردو)</label>
+                        <AutoTranslateButton sourceText={bioBodyUr} targetLang="en" onTranslated={setBioBodyEn} />
+                      </div>
+                      <textarea
+                        rows={6}
+                        dir="rtl"
+                        value={bioBodyUr}
+                        onChange={(e) => setBioBodyUr(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu focus:ring-2 focus:ring-amber-500"
+                        placeholder="تفصیلی سوانح حیات..."
+                      />
+                    </div>
+                  </div>
+
+                  <FileUploadDropzone
+                    label="Official Formal Portrait (تصویر)"
+                    sublabel="High-resolution archive photo displayed on the biography page"
+                    accept="image/*"
+                    allowedExtensionsText="PNG, JPG, WEBP"
+                    value={bioCoverImage}
+                    onFileSelect={(dataUrl) => setBioCoverImage(dataUrl)}
+                    onClear={() => setBioCoverImage(null)}
+                  />
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-800 hover:bg-amber-700 text-white text-sm font-semibold shadow-md transition-all disabled:opacity-50"
+                    >
+                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      <span>Save Biography Updates</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* 2. Homepage Hero Intro Settings */}
+                <form onSubmit={handleSaveIntro} className="space-y-6 border border-stone-200 rounded-2xl p-6 bg-stone-50/50">
+                  <div className="flex items-center justify-between pb-3 border-b border-stone-200">
+                    <div>
+                      <h4 className="text-base font-bold text-stone-900 font-serif">Homepage Hero Archive Intro (/ page)</h4>
+                      <p className="text-xs text-stone-500">Configure the top hero headline and digital archive introduction on the homepage.</p>
+                    </div>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900">Hero Section</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">Hero Title (English)</label>
+                        <AutoTranslateButton sourceText={introTitleEn} targetLang="ur" onTranslated={setIntroTitleUr} />
+                      </div>
+                      <input
+                        type="text"
+                        value={introTitleEn}
+                        onChange={(e) => setIntroTitleEn(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-amber-500"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">عنوان (اردو)</label>
+                        <AutoTranslateButton sourceText={introTitleUr} targetLang="en" onTranslated={setIntroTitleEn} />
+                      </div>
+                      <input
+                        type="text"
+                        dir="rtl"
+                        value={introTitleUr}
+                        onChange={(e) => setIntroTitleUr(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu focus:ring-2 focus:ring-amber-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">Hero Subtitle (English)</label>
+                        <AutoTranslateButton sourceText={introSubtitleEn} targetLang="ur" onTranslated={setIntroSubtitleUr} />
+                      </div>
+                      <input
+                        type="text"
+                        value={introSubtitleEn}
+                        onChange={(e) => setIntroSubtitleEn(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">ذیلی عنوان (اردو)</label>
+                        <AutoTranslateButton sourceText={introSubtitleUr} targetLang="en" onTranslated={setIntroSubtitleEn} />
+                      </div>
+                      <input
+                        type="text"
+                        dir="rtl"
+                        value={introSubtitleUr}
+                        onChange={(e) => setIntroSubtitleUr(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">Intro Overview (English)</label>
+                        <AutoTranslateButton sourceText={introBodyEn} targetLang="ur" onTranslated={setIntroBodyUr} />
+                      </div>
+                      <textarea
+                        rows={4}
+                        value={introBodyEn}
+                        onChange={(e) => setIntroBodyEn(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-stone-700 uppercase">تعارفی خلاصہ (اردو)</label>
+                        <AutoTranslateButton sourceText={introBodyUr} targetLang="en" onTranslated={setIntroBodyEn} />
+                      </div>
+                      <textarea
+                        rows={4}
+                        dir="rtl"
+                        value={introBodyUr}
+                        onChange={(e) => setIntroBodyUr(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-stone-300 text-sm font-urdu focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-800 hover:bg-amber-700 text-white text-sm font-semibold shadow-md transition-all disabled:opacity-50"
+                    >
+                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      <span>Save Homepage Intro Updates</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* TAB: AUDIT LOGS & ACTIVITY TRAIL                         */}
+            {/* ======================================================== */}
+            {activeTab === 'audit' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-stone-900 font-serif">System Audit Logs & Activity Trail</h3>
+                    <p className="text-xs text-stone-500">
+                      All administrative actions (creation, editing, deletion, access approvals) are immutably recorded for security and accountability.
+                    </p>
+                  </div>
+                  <button
+                    onClick={loadAllData}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-xs font-semibold text-stone-700 shadow-2xs transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Refresh Logs</span>
+                  </button>
+                </div>
+
+                {auditLogs.length === 0 ? (
+                  <div className="text-center py-12 text-stone-500 text-sm border border-stone-200 rounded-xl bg-stone-50">
+                    No administrative audit events recorded yet.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-stone-200 rounded-xl">
+                    <table className="w-full text-left text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b border-stone-200 bg-stone-50 text-stone-600 text-xs uppercase tracking-wider">
+                          <th className="py-3 px-4 font-semibold">Timestamp</th>
+                          <th className="py-3 px-4 font-semibold">Action</th>
+                          <th className="py-3 px-4 font-semibold">Resource Entity</th>
+                          <th className="py-3 px-4 font-semibold">Entity ID</th>
+                          <th className="py-3 px-4 font-semibold">Metadata & Details</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100">
+                        {auditLogs.map((log) => {
+                          const actionColors: Record<string, string> = {
+                            create: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                            update: 'bg-blue-100 text-blue-800 border-blue-200',
+                            delete: 'bg-rose-100 text-rose-800 border-rose-200',
+                            approve: 'bg-purple-100 text-purple-800 border-purple-200',
+                            reject: 'bg-amber-100 text-amber-800 border-amber-200',
+                          };
+                          const color = actionColors[log.action] || 'bg-stone-100 text-stone-700 border-stone-200';
+
+                          return (
+                            <tr key={log.id} className="hover:bg-stone-50/80 transition-colors">
+                              <td className="py-3 px-4 text-xs font-mono text-stone-600 whitespace-nowrap">
+                                {new Date(log.created_at).toLocaleString()}
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider border ${color}`}>
+                                  {log.action}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-xs font-semibold text-stone-800 capitalize">
+                                {log.entity_type}
+                              </td>
+                              <td className="py-3 px-4 text-xs font-mono text-stone-500 truncate max-w-[140px]">
+                                {log.entity_id || '—'}
+                              </td>
+                              <td className="py-3 px-4 text-xs text-stone-600 font-mono">
+                                {log.metadata ? JSON.stringify(log.metadata) : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ======================================================== */}
             {/* TAB: ACCESS REQUESTS REVIEW & APPROVALS                 */}
             {/* ======================================================== */}
@@ -1544,9 +2078,12 @@ export default function AdminPage() {
                             className="absolute inset-0 bg-cover bg-center filter blur-md opacity-35 scale-125"
                             style={{ backgroundImage: `url(${item.file_path})` }}
                           />
-                          <img
+                          <Image
                             src={item.file_path}
                             alt={item.title_en}
+                            width={160}
+                            height={160}
+                            unoptimized
                             className="relative z-10 max-w-full max-h-full object-contain transition-transform group-hover:scale-105"
                           />
                           <div className="absolute inset-0 z-20 bg-stone-950/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 text-white">
@@ -2336,9 +2873,12 @@ export default function AdminPage() {
                         className="absolute inset-0 bg-cover bg-center filter blur-lg opacity-35 scale-125"
                         style={{ backgroundImage: `url(${editPhotoFile || editingItem.item.file_path})` }}
                       />
-                      <img
+                      <Image
                         src={editPhotoFile || editingItem.item.file_path}
                         alt="Preview"
+                        width={400}
+                        height={300}
+                        unoptimized
                         className="relative z-10 max-h-60 max-w-full object-contain rounded-lg shadow-md"
                       />
                     </div>

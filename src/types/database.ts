@@ -1,8 +1,18 @@
 export type UserRole = 'admin' | 'approved_user' | 'user';
 export type Visibility = 'public' | 'restricted' | 'secret';
-export type ContentType = 'intro' | 'biography' | 'poetry' | 'article' | 'memory';
+export type ContentType = 'intro' | 'biography' | 'poetry' | 'article' | 'memory' | 'hamd';
 export type RequestStatus = 'pending' | 'approved' | 'rejected';
 export type ResourceType = 'all' | 'gallery' | 'books' | 'poetry' | 'video';
+
+export interface AuditLogItem {
+  id: string;
+  admin_id?: string | null;
+  action: 'create' | 'update' | 'delete' | 'approve' | 'reject' | 'login';
+  entity_type: string;
+  entity_id?: string | null;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
 
 export interface Profile {
   id: string;

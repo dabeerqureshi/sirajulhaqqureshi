@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { BookItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
 import { getStorageUrl } from '@/lib/supabase/storage';
@@ -44,10 +45,13 @@ export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCa
       {/* Book Cover */}
       <div className="sm:w-52 h-64 sm:h-auto relative bg-gradient-to-br from-amber-950 to-stone-900 shrink-0 flex items-center justify-center p-4">
         {coverUrl ? (
-          <img
+          <Image
             src={coverUrl}
             alt={book.title_en}
+            width={200}
+            height={280}
             className="max-w-full max-h-full object-contain rounded-md shadow-md group-hover:scale-105 transition-transform duration-300"
+            unoptimized={coverUrl.startsWith('data:')}
           />
         ) : (
           <div className="text-center text-amber-100 p-4 border border-amber-800/40 rounded flex flex-col items-center justify-center h-full">

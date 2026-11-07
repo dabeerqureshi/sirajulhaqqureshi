@@ -1,13 +1,46 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
 import { useLanguage } from '@/context/LanguageContext';
 import { mockBiography } from '@/lib/data/mockData';
+import { createClient } from '@/lib/supabase/client';
+import { getStorageUrl } from '@/lib/supabase/storage';
 
 export default function AboutPage() {
   const { language } = useLanguage();
+  const [bio, setBio] = useState(mockBiography);
+
+  useEffect(() => {
+    const loadBio = async () => {
+      const supabase = createClient();
+      if (!supabase) return;
+
+      const { data } = await supabase
+        .from('content')
+        .select('*')
+        .eq('type', 'biography')
+        .maybeSingle();
+
+      if (data) {
+        setBio({
+          ...mockBiography,
+          ...data,
+          title_en: data.title_en || mockBiography.title_en,
+          title_ur: data.title_ur || mockBiography.title_ur,
+          subtitle_en: data.subtitle_en || mockBiography.subtitle_en,
+          subtitle_ur: data.subtitle_ur || mockBiography.subtitle_ur,
+          body_en: data.body_en || mockBiography.body_en,
+          body_ur: data.body_ur || mockBiography.body_ur,
+          cover_image: data.cover_image ? getStorageUrl(data.cover_image) : mockBiography.cover_image,
+        });
+      }
+    };
+
+    loadBio();
+  }, []);
 
   const milestones = [
     {
@@ -52,10 +85,10 @@ export default function AboutPage() {
               {language === 'ur' ? 'سوانحِ حیات و فکری سفر' : 'Biography & Intellectual Legacy'}
             </span>
             <h1 className={`text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-900 ${language === 'ur' ? 'font-urdu' : 'font-serif'}`}>
-              {language === 'ur' ? mockBiography.title_ur : mockBiography.title_en}
+              {language === 'ur' ? bio.title_ur : bio.title_en}
             </h1>
             <p className={`text-base sm:text-lg text-stone-600 max-w-2xl mx-auto ${language === 'ur' ? 'font-urdu' : 'font-serif italic'}`}>
-              {language === 'ur' ? mockBiography.subtitle_ur : mockBiography.subtitle_en}
+              {language === 'ur' ? bio.subtitle_ur : bio.subtitle_en}
             </p>
           </div>
 
@@ -63,13 +96,19 @@ export default function AboutPage() {
           <div className="relative rounded-3xl overflow-hidden shadow-xl border border-stone-800 bg-stone-950 flex items-center justify-center p-3 h-80 sm:h-96">
             <div
               className="absolute inset-0 bg-cover bg-center filter blur-md opacity-35 scale-125"
-              style={{ backgroundImage: `url(${mockBiography.cover_image || ''})` }}
+              style={{ backgroundImage: `url(${bio.cover_image || ''})` }}
             />
-            <img
-              src={mockBiography.cover_image || ''}
-              alt="Siraj ul Haq Qureshi Archives"
-              className="relative z-10 max-h-full max-w-full object-contain rounded-xl shadow-md"
-            />
+            <div className="relative z-10 w-full h-full flex items-center justify-center">
+              <Image
+                src={bio.cover_image || '/gallery/siraj-profile.jpg'}
+                alt="Siraj ul Haq Qureshi Archives"
+                width={600}
+                height={400}
+                priority
+                className="max-h-full max-w-full object-contain rounded-xl shadow-md"
+                unoptimized={!!bio.cover_image?.startsWith('data:')}
+              />
+            </div>
           </div>
 
           {/* In-depth Narrative */}
@@ -81,13 +120,8 @@ export default function AboutPage() {
             <div className={`prose prose-stone max-w-none text-stone-700 leading-relaxed space-y-4 text-base sm:text-lg ${language === 'ur' ? 'font-urdu' : ''}`}>
               <p>
                 {language === 'ur'
-                  ? 'سراج الحق قریشی نے اپنی پوری زندگی علم، اخلاق، اور شعر و ادب کی آبیاری کے لیے وقف رکھی۔ ان کی شاعری میں روایتی تغزل کے ساتھ ساتھ گہرے سماجی شعور اور انسانی دردمندی کا احساس نمایاں ہے۔ انہوں نے زبان و بیان کی نزاکتوں کو برقرار رکھتے ہوئے عصری موضوعات کو نہایت سلیقے سے پیش کیا۔'
-                  : 'Siraj ul Haq Qureshi was an eminent scholar and poet whose enduring legacy is marked by intellectual integrity, literary craftsmanship, and a relentless quest for ethical truth. His ghazals and nazms effortlessly bridge classical Urdu prosody with poignant reflections on contemporary human struggles.'}
-              </p>
-              <p>
-                {language === 'ur'
-                  ? 'ان کی نثری تصانیف میں فلسفہ، اخلاقیات اور مشرقی فکر پر گہرے مباحث شامل ہیں، جو آج بھی تحقیق کرنے والوں کے لیے ایک رہنما ماخذ کی حیثیت رکھتے ہیں۔ ان کے ذاتی کتب خانے اور مسودات کو اس ڈیجیٹل آرکائیو کے ذریعے محفوظ کر دیا گیا ہے تاکہ یہ قیمتی خزانہ ہمیشہ زندہ رہے۔'
-                  : 'His prose treatises explore profound dimensions of Eastern philosophy, civic conscience, and moral philosophy. Through this digital archive, researchers, family members, and literature lovers from across the globe have direct access to his books, manuscripts, and lifetime archive.'}
+                  ? (bio.body_ur || mockBiography.body_ur)
+                  : (bio.body_en || mockBiography.body_en)}
               </p>
             </div>
           </div>

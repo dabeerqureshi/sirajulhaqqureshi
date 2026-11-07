@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { ContentItem, PoetryVerse } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
 import {
@@ -155,10 +156,13 @@ export default function PoetryCard({ poetry, onRequestAccess }: PoetryCardProps)
             {/* Attached Manuscript Artwork/Image if present */}
             {isImage && resolvedUrl && (
               <div className="relative group rounded-xl overflow-hidden border border-stone-200 bg-stone-100 max-h-56 flex items-center justify-center">
-                <img
+                <Image
                   src={resolvedUrl}
                   alt={displayTitle}
+                  width={500}
+                  height={300}
                   className="max-h-56 w-full object-contain transition-transform duration-300 group-hover:scale-102"
+                  unoptimized={resolvedUrl.startsWith('data:')}
                 />
                 <button
                   type="button"
@@ -304,10 +308,13 @@ export default function PoetryCard({ poetry, onRequestAccess }: PoetryCardProps)
               </div>
             </div>
             <div className="p-2 overflow-auto flex items-center justify-center">
-              <img
+              <Image
                 src={resolvedUrl}
                 alt={displayTitle}
+                width={1200}
+                height={900}
                 className="max-h-[80vh] w-auto object-contain rounded-lg shadow-lg"
+                unoptimized={resolvedUrl.startsWith('data:')}
               />
             </div>
           </div>
