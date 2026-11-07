@@ -8,6 +8,8 @@ import FileUploadDropzone from '@/components/admin/FileUploadDropzone';
 import HamdManager from '@/app/admin/components/HamdManager';
 import { AccessRequest, BookItem, ContentItem, GalleryItem, VideoItem } from '@/types/database';
 import { createClient } from '@/lib/supabase/client';
+import AutoTranslateButton from '@/components/admin/AutoTranslateButton';
+import { autoTranslatePair } from '@/lib/translate';
 import {
   ShieldCheck,
   Lock,
@@ -209,6 +211,11 @@ export default function AdminPage() {
     const supabase = createClient();
     if (!supabase) return;
 
+    if (!vidTitleEn.trim() && !vidTitleUr.trim()) {
+      showToast('Please provide a video title in English or Urdu.');
+      return;
+    }
+
     if (!vidYoutubeUrl.trim() && !vidPath.trim()) {
       showToast('Please provide either a YouTube URL or a video path/file.');
       return;
@@ -216,13 +223,16 @@ export default function AdminPage() {
 
     setSaving(true);
     try {
+      const { en: finalVidTitleEn, ur: finalVidTitleUr } = await autoTranslatePair(vidTitleEn, vidTitleUr);
+      const { en: finalVidDescEn, ur: finalVidDescUr } = await autoTranslatePair(vidDescEn, vidDescUr);
+
       const newVideo = {
-        title_en: vidTitleEn.trim(),
-        title_ur: vidTitleUr.trim(),
+        title_en: finalVidTitleEn,
+        title_ur: finalVidTitleUr,
         youtube_url: vidYoutubeUrl.trim() || null,
         video_path: vidYoutubeUrl.trim() || vidPath.trim() || 'youtube',
-        description_en: vidDescEn.trim() || null,
-        description_ur: vidDescUr.trim() || null,
+        description_en: finalVidDescEn || null,
+        description_ur: finalVidDescUr || null,
         category: vidCategory,
         duration: vidDuration.trim() || null,
         visibility: vidVisibility,
@@ -281,11 +291,17 @@ export default function AdminPage() {
   const [photoVisibility, setPhotoVisibility] = useState<'public' | 'restricted'>('public');
   const [photoDate, setPhotoDate] = useState('');
   const [photoFile, setPhotoFile] = useState<string | null>(null);
+  const [photoRawFile, setPhotoRawFile] = useState<File | null>(null);
 
   const handleAddPhoto = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
     if (!supabase) return;
+
+    if (!photoTitleEn.trim() && !photoTitleUr.trim()) {
+      showToast('Please provide a photograph title in English or Urdu.');
+      return;
+    }
 
     if (!photoFile) {
       showToast('Please select or upload a photograph.');
@@ -294,13 +310,36 @@ export default function AdminPage() {
 
     setSaving(true);
     try {
+      let finalPhotoPath = photoFile;
+
+      if (photoRawFile) {
+        const safeName = photoRawFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `gallery/${Date.now()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from('public-assets')
+          .upload(storagePath, photoRawFile, {
+            contentType: photoRawFile.type || 'image/jpeg',
+            upsert: true,
+          });
+
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('public-assets')
+            .getPublicUrl(storagePath);
+          finalPhotoPath = publicUrl;
+        }
+      }
+
+      const { en: finalPhotoTitleEn, ur: finalPhotoTitleUr } = await autoTranslatePair(photoTitleEn, photoTitleUr);
+      const { en: finalPhotoDescEn, ur: finalPhotoDescUr } = await autoTranslatePair(photoDescEn, photoDescUr);
+
       const newPhoto = {
-        title_en: photoTitleEn.trim(),
-        title_ur: photoTitleUr.trim(),
-        description_en: photoDescEn.trim() || null,
-        description_ur: photoDescUr.trim() || null,
+        title_en: finalPhotoTitleEn,
+        title_ur: finalPhotoTitleUr,
+        description_en: finalPhotoDescEn || null,
+        description_ur: finalPhotoDescUr || null,
         category: photoCategory,
-        file_path: photoFile,
+        file_path: finalPhotoPath,
         visibility: photoVisibility,
         sort_order: galleryList.length + 1,
         taken_date: photoDate.trim() || null,
@@ -320,6 +359,7 @@ export default function AdminPage() {
       setPhotoDescEn('');
       setPhotoDescUr('');
       setPhotoFile(null);
+      setPhotoRawFile(null);
       setPhotoDate('');
       showToast('Photograph saved to gallery successfully!');
     } catch (err) {
@@ -373,27 +413,59 @@ export default function AdminPage() {
   const [poemVerseEn, setPoemVerseEn] = useState('');
   const [poemVisibility, setPoemVisibility] = useState<'public' | 'restricted'>('public');
   const [poemMediaFile, setPoemMediaFile] = useState<string | null>(null);
+  const [poemRawFile, setPoemRawFile] = useState<File | null>(null);
 
   const handleAddPoem = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
     if (!supabase) return;
 
+    if (!poemTitleEn.trim() && !poemTitleUr.trim()) {
+      showToast('Please provide a poem title in English or Urdu.');
+      return;
+    }
+
     setSaving(true);
     try {
+      let finalMediaUrl = poemMediaFile;
+
+      // If a raw file was selected, upload directly to Supabase storage public-assets bucket
+      if (poemRawFile) {
+        const safeName = poemRawFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `poetry/${Date.now()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from('public-assets')
+          .upload(storagePath, poemRawFile, {
+            contentType: poemRawFile.type || 'application/octet-stream',
+            upsert: true,
+          });
+
+        if (!uploadError) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('public-assets')
+            .getPublicUrl(storagePath);
+          finalMediaUrl = publicUrl;
+        } else {
+          console.warn('Storage upload fallback:', uploadError);
+        }
+      }
+
+      const { en: finalPoemTitleEn, ur: finalPoemTitleUr } = await autoTranslatePair(poemTitleEn, poemTitleUr);
+      const { en: finalPoemVerseEn, ur: finalPoemVerseUr } = await autoTranslatePair(poemVerseEn, poemVerseUr);
+
       const newPoem = {
         type: 'poetry',
-        title_en: poemTitleEn.trim() || 'Untitled Poem',
-        title_ur: poemTitleUr.trim() || 'بلا عنوان',
-        subtitle_en: poemMediaFile ? 'Manuscript attached' : 'Published from Archive',
+        title_en: finalPoemTitleEn || 'Untitled Poem',
+        title_ur: finalPoemTitleUr || 'بلا عنوان',
+        subtitle_en: finalMediaUrl ? 'Manuscript attached' : 'Published from Archive',
         subtitle_ur: 'تازہ کلام مع دستاویز',
         verses: [
           {
-            ur: poemVerseUr.trim(),
-            en: poemVerseEn.trim() || undefined,
+            ur: finalPoemVerseUr,
+            en: finalPoemVerseEn || undefined,
           },
         ],
-        cover_image: poemMediaFile || null,
+        cover_image: finalMediaUrl || null,
         visibility: poemVisibility,
         published: true,
         sort_order: poetryList.length + 1,
@@ -412,6 +484,7 @@ export default function AdminPage() {
       setPoemVerseUr('');
       setPoemVerseEn('');
       setPoemMediaFile(null);
+      setPoemRawFile(null);
       showToast('Poetic verse published to archive successfully!');
     } catch (err) {
       showToast(`Error publishing poem: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -447,25 +520,68 @@ export default function AdminPage() {
   const [bookVisibility, setBookVisibility] = useState<'public' | 'restricted'>('public');
   const [bookPages, setBookPages] = useState('150');
   const [bookCoverFile, setBookCoverFile] = useState<string | null>(null);
+  const [bookCoverRawFile, setBookCoverRawFile] = useState<File | null>(null);
   const [bookPdfFile, setBookPdfFile] = useState<string | null>(null);
+  const [bookPdfRawFile, setBookPdfRawFile] = useState<File | null>(null);
 
   const handleAddBook = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
     if (!supabase) return;
 
+    if (!bookTitleEn.trim() && !bookTitleUr.trim()) {
+      showToast('Please provide a book title in English or Urdu.');
+      return;
+    }
+
     setSaving(true);
     try {
+      let finalCoverUrl = bookCoverFile;
+      if (bookCoverRawFile) {
+        const safeName = bookCoverRawFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `books/covers/${Date.now()}-${safeName}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('public-assets')
+          .upload(storagePath, bookCoverRawFile, {
+            contentType: bookCoverRawFile.type || 'image/jpeg',
+            upsert: true,
+          });
+        if (!uploadErr) {
+          const { data: { publicUrl } } = supabase.storage.from('public-assets').getPublicUrl(storagePath);
+          finalCoverUrl = publicUrl;
+        }
+      }
+
+      let finalPdfUrl = bookPdfFile;
+      if (bookPdfRawFile) {
+        const safeName = bookPdfRawFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `books/pdfs/${Date.now()}-${safeName}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('public-assets')
+          .upload(storagePath, bookPdfRawFile, {
+            contentType: 'application/pdf',
+            upsert: true,
+          });
+        if (!uploadErr) {
+          const { data: { publicUrl } } = supabase.storage.from('public-assets').getPublicUrl(storagePath);
+          finalPdfUrl = publicUrl;
+        }
+      }
+
+      const { en: finalBookTitleEn, ur: finalBookTitleUr } = await autoTranslatePair(bookTitleEn, bookTitleUr);
+      const { en: finalBookAuthorEn, ur: finalBookAuthorUr } = await autoTranslatePair(bookAuthorEn, bookAuthorUr);
+      const { en: finalBookDescEn, ur: finalBookDescUr } = await autoTranslatePair(bookDescEn, bookDescUr);
+
       const newBook = {
-        title_en: bookTitleEn.trim(),
-        title_ur: bookTitleUr.trim(),
-        author_en: bookAuthorEn.trim(),
-        author_ur: bookAuthorUr.trim(),
-        description_en: bookDescEn.trim() || null,
-        description_ur: bookDescUr.trim() || null,
+        title_en: finalBookTitleEn,
+        title_ur: finalBookTitleUr,
+        author_en: finalBookAuthorEn || 'Siraj ul Haq Qureshi',
+        author_ur: finalBookAuthorUr || 'سراج الحق قریشی',
+        description_en: finalBookDescEn || null,
+        description_ur: finalBookDescUr || null,
         category: bookCategory,
-        cover_path: bookCoverFile || null,
-        file_path: bookPdfFile || null,
+        cover_path: finalCoverUrl || null,
+        file_path: finalPdfUrl || null,
         visibility: bookVisibility,
         published: true,
         pages_count: parseInt(bookPages) || 150,
@@ -486,7 +602,9 @@ export default function AdminPage() {
       setBookDescEn('');
       setBookDescUr('');
       setBookCoverFile(null);
+      setBookCoverRawFile(null);
       setBookPdfFile(null);
+      setBookPdfRawFile(null);
       showToast('Book published to archive successfully!');
     } catch (err) {
       showToast(`Error adding book: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -569,6 +687,7 @@ export default function AdminPage() {
           verses: [{ ur: urVerse, en: enVerse || undefined }],
           visibility: formData.get('visibility') as 'public' | 'restricted',
           published: formData.get('published') === 'on',
+          cover_image: item.cover_image || null,
         };
 
         const { error } = await supabase.from('content').update(updates).eq('id', item.id);
@@ -852,6 +971,23 @@ export default function AdminPage() {
 
           {/* MAIN TAB CONTENT CONTAINER */}
           <div className="bg-white rounded-b-2xl border-x border-b border-stone-200 p-6 sm:p-8 shadow-xs">
+            {/* Auto-Translation Helper Callout */}
+            <div className="mb-8 p-3.5 sm:p-4 rounded-xl bg-gradient-to-r from-amber-50 to-stone-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <span className="font-bold text-amber-900">خودکار دو لسانی ترجمہ (Bilingual Auto-Translation):</span>{' '}
+                  <span className="text-stone-700">
+                    آپ انگریزی یا اردو کسی بھی زبان میں مواد درج فرمائیں۔ دوسری زبان خود بخود ترجمہ ہو جائے گی۔
+                  </span>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-100/90 px-2.5 py-1 rounded-lg border border-amber-300 shrink-0">
+                <span>✨ Write in English or Urdu</span>
+              </span>
+            </div>
             
             {/* ======================================================== */}
             {/* TAB: ACCESS REQUESTS REVIEW & APPROVALS                 */}
@@ -975,12 +1111,18 @@ export default function AdminPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Video Title (English) *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Video Title (English)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={vidTitleUr}
+                          targetLang="en"
+                          onTranslated={(t) => setVidTitleEn(t)}
+                        />
+                      </div>
                       <input
                         type="text"
-                        required
                         value={vidTitleEn}
                         onChange={(e) => setVidTitleEn(e.target.value)}
                         placeholder="e.g. Literary Address at National University"
@@ -989,13 +1131,19 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Video Title (اردو عنوان) *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Video Title (اردو عنوان)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={vidTitleEn}
+                          targetLang="ur"
+                          onTranslated={(t) => setVidTitleUr(t)}
+                        />
+                      </div>
                       <input
                         type="text"
                         dir="rtl"
-                        required
                         value={vidTitleUr}
                         onChange={(e) => setVidTitleUr(e.target.value)}
                         placeholder="مثلاً: قومی یونیورسٹی میں صدارتی خطبہ"
@@ -1069,9 +1217,16 @@ export default function AdminPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Description (English)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Description (English)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={vidDescUr}
+                          targetLang="en"
+                          onTranslated={(t) => setVidDescEn(t)}
+                        />
+                      </div>
                       <textarea
                         rows={2}
                         value={vidDescEn}
@@ -1082,9 +1237,16 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Description (اردو تفصیل)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Description (اردو تفصیل)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={vidDescEn}
+                          targetLang="ur"
+                          onTranslated={(t) => setVidDescUr(t)}
+                        />
+                      </div>
                       <textarea
                         rows={2}
                         dir="rtl"
@@ -1198,18 +1360,30 @@ export default function AdminPage() {
                     allowedExtensionsText="PNG, JPEG, JPG, WEBP"
                     maxSizeMB={20}
                     value={photoFile}
-                    onFileSelect={(dataUrl) => setPhotoFile(dataUrl)}
-                    onClear={() => setPhotoFile(null)}
+                    onFileSelect={(dataUrl, fileName, fileType, rawFile) => {
+                      setPhotoFile(dataUrl);
+                      if (rawFile) setPhotoRawFile(rawFile);
+                    }}
+                    onClear={() => {
+                      setPhotoFile(null);
+                      setPhotoRawFile(null);
+                    }}
                   />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Photo Title (English) *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Photo Title (English)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={photoTitleUr}
+                          targetLang="en"
+                          onTranslated={(t) => setPhotoTitleEn(t)}
+                        />
+                      </div>
                       <input
                         type="text"
-                        required
                         value={photoTitleEn}
                         onChange={(e) => setPhotoTitleEn(e.target.value)}
                         placeholder="e.g. Presiding over 1985 Mushaira"
@@ -1218,13 +1392,19 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Photo Title (اردو عنوان) *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Photo Title (اردو عنوان)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={photoTitleEn}
+                          targetLang="ur"
+                          onTranslated={(t) => setPhotoTitleUr(t)}
+                        />
+                      </div>
                       <input
                         type="text"
                         dir="rtl"
-                        required
                         value={photoTitleUr}
                         onChange={(e) => setPhotoTitleUr(e.target.value)}
                         placeholder="مثلاً: صدارت قومی مشاعرہ ۱۹۸۵ء"
@@ -1281,9 +1461,16 @@ export default function AdminPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Caption (English)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Caption (English)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={photoDescUr}
+                          targetLang="en"
+                          onTranslated={(t) => setPhotoDescEn(t)}
+                        />
+                      </div>
                       <textarea
                         rows={2}
                         value={photoDescEn}
@@ -1294,9 +1481,16 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Caption (اردو وضاحتی نوٹ)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Caption (اردو وضاحتی نوٹ)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={photoDescEn}
+                          targetLang="ur"
+                          onTranslated={(t) => setPhotoDescUr(t)}
+                        />
+                      </div>
                       <textarea
                         rows={2}
                         dir="rtl"
@@ -1405,23 +1599,35 @@ export default function AdminPage() {
 
                   <FileUploadDropzone
                     label="Attach Handwritten Manuscript or Calligraphy Scan (Optional)"
-                    sublabel="Original handwritten draft or calligraphy artwork for this poem"
+                    sublabel="Original handwritten draft or calligraphy artwork for this poem (PDF, PNG, JPEG, WEBP)"
                     accept="image/png, image/jpeg, image/webp, application/pdf"
                     allowedExtensionsText="PNG, JPEG, WEBP, PDF"
                     maxSizeMB={15}
                     value={poemMediaFile}
-                    onFileSelect={(dataUrl) => setPoemMediaFile(dataUrl)}
-                    onClear={() => setPoemMediaFile(null)}
+                    onFileSelect={(dataUrl, fileName, fileType, rawFile) => {
+                      setPoemMediaFile(dataUrl);
+                      if (rawFile) setPoemRawFile(rawFile);
+                    }}
+                    onClear={() => {
+                      setPoemMediaFile(null);
+                      setPoemRawFile(null);
+                    }}
                   />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Poem Title (English) *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Poem Title (English)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={poemTitleUr}
+                          targetLang="en"
+                          onTranslated={(t) => setPoemTitleEn(t)}
+                        />
+                      </div>
                       <input
                         type="text"
-                        required
                         value={poemTitleEn}
                         onChange={(e) => setPoemTitleEn(e.target.value)}
                         placeholder="e.g. Whispers of Dawn"
@@ -1430,13 +1636,19 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Poem Title (اردو عنوان) *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Poem Title (اردو عنوان)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={poemTitleEn}
+                          targetLang="ur"
+                          onTranslated={(t) => setPoemTitleUr(t)}
+                        />
+                      </div>
                       <input
                         type="text"
                         dir="rtl"
-                        required
                         value={poemTitleUr}
                         onChange={(e) => setPoemTitleUr(e.target.value)}
                         placeholder="مثلاً: سحر کی سرگوشیاں"
@@ -1446,13 +1658,20 @@ export default function AdminPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                      Urdu Verses (اردو اشعار - نستعلیق) *
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-stone-700 uppercase">
+                        Urdu Verses (اردو اشعار - نستعلیق)
+                      </label>
+                      <AutoTranslateButton
+                        sourceText={poemVerseEn}
+                        targetLang="ur"
+                        label="✨ انگریزی سے اشعار بنائیں"
+                        onTranslated={(t) => setPoemVerseUr(t)}
+                      />
+                    </div>
                     <textarea
                       rows={4}
                       dir="rtl"
-                      required
                       value={poemVerseUr}
                       onChange={(e) => setPoemVerseUr(e.target.value)}
                       placeholder="اشعار یہاں درج فرمائیں..."
@@ -1461,14 +1680,22 @@ export default function AdminPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                      English Translation / Commentary (Optional)
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-stone-700 uppercase">
+                        English Translation / Commentary
+                      </label>
+                      <AutoTranslateButton
+                        sourceText={poemVerseUr}
+                        targetLang="en"
+                        label="✨ Translate Verses to English"
+                        onTranslated={(t) => setPoemVerseEn(t)}
+                      />
+                    </div>
                     <textarea
                       rows={3}
                       value={poemVerseEn}
                       onChange={(e) => setPoemVerseEn(e.target.value)}
-                      placeholder="English translation or literary commentary..."
+                      placeholder="English translation or commentary (auto-translates on publish if left empty)..."
                       className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-hidden"
                     />
                   </div>
@@ -1581,8 +1808,14 @@ export default function AdminPage() {
                     allowedExtensionsText="PDF Documents (.pdf)"
                     maxSizeMB={50}
                     value={bookPdfFile}
-                    onFileSelect={(dataUrl) => setBookPdfFile(dataUrl)}
-                    onClear={() => setBookPdfFile(null)}
+                    onFileSelect={(dataUrl, fileName, fileType, rawFile) => {
+                      setBookPdfFile(dataUrl);
+                      if (rawFile) setBookPdfRawFile(rawFile);
+                    }}
+                    onClear={() => {
+                      setBookPdfFile(null);
+                      setBookPdfRawFile(null);
+                    }}
                   />
 
                   <FileUploadDropzone
@@ -1592,18 +1825,30 @@ export default function AdminPage() {
                     allowedExtensionsText="PNG, JPEG, WEBP"
                     maxSizeMB={10}
                     value={bookCoverFile}
-                    onFileSelect={(dataUrl) => setBookCoverFile(dataUrl)}
-                    onClear={() => setBookCoverFile(null)}
+                    onFileSelect={(dataUrl, fileName, fileType, rawFile) => {
+                      setBookCoverFile(dataUrl);
+                      if (rawFile) setBookCoverRawFile(rawFile);
+                    }}
+                    onClear={() => {
+                      setBookCoverFile(null);
+                      setBookCoverRawFile(null);
+                    }}
                   />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Book Title (English) *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Book Title (English)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={bookTitleUr}
+                          targetLang="en"
+                          onTranslated={(t) => setBookTitleEn(t)}
+                        />
+                      </div>
                       <input
                         type="text"
-                        required
                         value={bookTitleEn}
                         onChange={(e) => setBookTitleEn(e.target.value)}
                         placeholder="e.g. Kulliyat-e-Siraj"
@@ -1612,13 +1857,19 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Book Title (اردو عنوان) *
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Book Title (اردو عنوان)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={bookTitleEn}
+                          targetLang="ur"
+                          onTranslated={(t) => setBookTitleUr(t)}
+                        />
+                      </div>
                       <input
                         type="text"
                         dir="rtl"
-                        required
                         value={bookTitleUr}
                         onChange={(e) => setBookTitleUr(e.target.value)}
                         placeholder="مثلاً: کلیاتِ سراج"
@@ -1629,9 +1880,16 @@ export default function AdminPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Author (English)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Author (English)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={bookAuthorUr}
+                          targetLang="en"
+                          onTranslated={(t) => setBookAuthorEn(t)}
+                        />
+                      </div>
                       <input
                         type="text"
                         value={bookAuthorEn}
@@ -1641,9 +1899,16 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Author (اردو)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Author (اردو)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={bookAuthorEn}
+                          targetLang="ur"
+                          onTranslated={(t) => setBookAuthorUr(t)}
+                        />
+                      </div>
                       <input
                         type="text"
                         dir="rtl"
@@ -1700,9 +1965,16 @@ export default function AdminPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Synopsis (English)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Synopsis (English)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={bookDescUr}
+                          targetLang="en"
+                          onTranslated={(t) => setBookDescEn(t)}
+                        />
+                      </div>
                       <textarea
                         rows={2}
                         value={bookDescEn}
@@ -1713,9 +1985,16 @@ export default function AdminPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-                        Synopsis (اردو تعارف)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700 uppercase">
+                          Synopsis (اردو تعارف)
+                        </label>
+                        <AutoTranslateButton
+                          sourceText={bookDescEn}
+                          targetLang="ur"
+                          onTranslated={(t) => setBookDescUr(t)}
+                        />
+                      </div>
                       <textarea
                         rows={2}
                         dir="rtl"

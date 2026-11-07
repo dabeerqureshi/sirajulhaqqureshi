@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { GalleryItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
+import { getStorageUrl } from '@/lib/supabase/storage';
 import { Lock, Eye, Calendar, Filter, X } from 'lucide-react';
 
 interface GalleryGridProps {
@@ -54,6 +55,7 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredItems.map((item) => {
           const isRestricted = item.visibility === 'restricted';
+          const resolvedPhotoUrl = getStorageUrl(item.file_path);
 
           return (
             <div
@@ -72,12 +74,12 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
                 {/* Ambient backdrop matching image colors for seamless aesthetics */}
                 <div
                   className="absolute inset-0 bg-cover bg-center filter blur-xl opacity-30 scale-110"
-                  style={{ backgroundImage: `url(${item.file_path})` }}
+                  style={{ backgroundImage: `url(${resolvedPhotoUrl})` }}
                 />
 
                 {/* Full, uncropped photograph */}
                 <img
-                  src={item.file_path}
+                  src={resolvedPhotoUrl}
                   alt={item.title_en}
                   className={`relative z-10 max-h-full max-w-full w-auto h-auto object-contain rounded-lg drop-shadow-md transition-transform duration-500 group-hover:scale-[1.03] ${
                     isRestricted ? 'filter blur-md brightness-75 scale-105 select-none' : ''
@@ -162,7 +164,7 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
 
             <div className="relative max-h-[75vh] bg-black flex items-center justify-center p-3">
               <img
-                src={activePhoto.file_path}
+                src={getStorageUrl(activePhoto.file_path)}
                 alt={activePhoto.title_en}
                 className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg"
               />

@@ -27,7 +27,7 @@ export default function GalleryPage() {
         .select('*')
         .order('sort_order', { ascending: true });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setItems(data);
       }
     };

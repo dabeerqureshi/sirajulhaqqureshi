@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { UploadCloud, FileText, Image as ImageIcon, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { UploadCloud, FileText, X, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface FileUploadDropzoneProps {
   label: string;
@@ -10,7 +10,7 @@ interface FileUploadDropzoneProps {
   allowedExtensionsText: string; // e.g. "PNG, JPEG, WEBP" or "PDF"
   maxSizeMB?: number;
   value?: string | null;
-  onFileSelect: (fileDataUrl: string, fileName: string, fileType: string) => void;
+  onFileSelect: (fileDataUrl: string, fileName: string, fileType: string, rawFile?: File) => void;
   onClear?: () => void;
 }
 
@@ -27,7 +27,6 @@ export default function FileUploadDropzone({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
-  const [selectedFileType, setSelectedFileType] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const processFile = (file: File) => {
@@ -43,8 +42,7 @@ export default function FileUploadDropzone({
     reader.onload = () => {
       const dataUrl = reader.result as string;
       setSelectedFileName(file.name);
-      setSelectedFileType(file.type);
-      onFileSelect(dataUrl, file.name, file.type);
+      onFileSelect(dataUrl, file.name, file.type, file);
     };
     reader.onerror = () => {
       setErrorMessage('Failed to read file.');
@@ -70,7 +68,6 @@ export default function FileUploadDropzone({
 
   const handleClear = () => {
     setSelectedFileName(null);
-    setSelectedFileType(null);
     setErrorMessage(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (onClear) onClear();

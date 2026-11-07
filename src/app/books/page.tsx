@@ -33,7 +33,7 @@ export default function BooksPage() {
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        setBooks(data.filter((b: BookItem) => b.published));
+        setBooks(data.filter((b: BookItem) => b.published !== false));
       }
       setLoading(false);
     };

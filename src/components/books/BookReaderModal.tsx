@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { BookItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
+import { getStorageUrl } from '@/lib/supabase/storage';
 import {
   X,
   Download,
@@ -31,6 +32,7 @@ export default function BookReaderModal({ book, isOpen, onClose }: BookReaderMod
   if (!isOpen || !book) return null;
 
   const totalPages = book.pages_count || 120;
+  const resolvedPdfUrl = getStorageUrl(book.file_path);
 
   const handleNextPage = () => {
     if (currentPage < totalPages) setCurrentPage((prev) => prev + 1);
@@ -120,8 +122,10 @@ Across these pages, we have chronicled the milestones of a lifetime devoted to k
 
             {/* Direct Download Button */}
             <a
-              href={book.file_path || '#'}
+              href={resolvedPdfUrl || '#'}
               download
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-800 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
@@ -150,11 +154,11 @@ Across these pages, we have chronicled the milestones of a lifetime devoted to k
 
         {/* READER MAIN BODY */}
         <div className="flex-1 overflow-y-auto bg-stone-950 flex justify-center p-4 sm:p-8">
-          {viewMode === 'pdf' && book.file_path ? (
+          {viewMode === 'pdf' && resolvedPdfUrl ? (
             /* Embedded PDF Frame View */
             <div className="w-full h-full rounded-xl overflow-hidden border border-stone-800 bg-stone-900 shadow-2xl">
               <iframe
-                src={`${book.file_path}#view=FitH`}
+                src={`${resolvedPdfUrl}#view=FitH`}
                 title={book.title_en}
                 className="w-full h-full border-none"
               />

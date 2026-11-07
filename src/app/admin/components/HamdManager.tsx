@@ -17,6 +17,8 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { getHamdItems, hamdDownloadUrl, hamdFileUrl } from '@/lib/data/hamd';
 import { useLanguage } from '@/context/LanguageContext';
+import AutoTranslateButton from '@/components/admin/AutoTranslateButton';
+import { autoTranslatePair } from '@/lib/translate';
 import type { ContentItem } from '@/types/database';
 
 const MAX_PDF_MB = 50;
@@ -102,8 +104,8 @@ export default function HamdManager({ onToast }: Props) {
     e.preventDefault();
     setSubmitError(null);
 
-    if (!titleEn.trim() || !titleUr.trim()) {
-      setSubmitError('Both English and Urdu titles are required.');
+    if (!titleEn.trim() && !titleUr.trim()) {
+      setSubmitError('Please enter a Hamd title in English or Urdu.');
       return;
     }
     if (!pdfFile) {
@@ -113,6 +115,9 @@ export default function HamdManager({ onToast }: Props) {
 
     setSubmitting(true);
     try {
+      const { en: finalTitleEn, ur: finalTitleUr } = await autoTranslatePair(titleEn, titleUr);
+      const { en: finalSubtitleEn, ur: finalSubtitleUr } = await autoTranslatePair(subtitleEn, subtitleUr);
+
       const urlRes = await fetch('/api/hamd/upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -140,10 +145,10 @@ export default function HamdManager({ onToast }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           path: urlJson.path,
-          title_en: titleEn.trim(),
-          title_ur: titleUr.trim(),
-          subtitle_en: subtitleEn.trim(),
-          subtitle_ur: subtitleUr.trim(),
+          title_en: finalTitleEn,
+          title_ur: finalTitleUr,
+          subtitle_en: finalSubtitleEn,
+          subtitle_ur: finalSubtitleUr,
         }),
       });
       const saveJson = await saveRes.json().catch(() => ({}));
@@ -256,12 +261,18 @@ export default function HamdManager({ onToast }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-              Hamd Title (English)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-stone-700 uppercase">
+                Hamd Title (English)
+              </label>
+              <AutoTranslateButton
+                sourceText={titleUr}
+                targetLang="en"
+                onTranslated={(t) => setTitleEn(t)}
+              />
+            </div>
             <input
               type="text"
-              required
               value={titleEn}
               onChange={(e) => setTitleEn(e.target.value)}
               placeholder="e.g. Hamd — The Divine Praise"
@@ -270,13 +281,19 @@ export default function HamdManager({ onToast }: Props) {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-              Hamd Title (اردو عنوان)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-stone-700 uppercase">
+                Hamd Title (اردو عنوان)
+              </label>
+              <AutoTranslateButton
+                sourceText={titleEn}
+                targetLang="ur"
+                onTranslated={(t) => setTitleUr(t)}
+              />
+            </div>
             <input
               type="text"
               dir="rtl"
-              required
               value={titleUr}
               onChange={(e) => setTitleUr(e.target.value)}
               placeholder="مثلاً: حمدِ خالق"
@@ -288,9 +305,16 @@ export default function HamdManager({ onToast }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-              Subtitle / Context (English)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-stone-700 uppercase">
+                Subtitle / Context (English)
+              </label>
+              <AutoTranslateButton
+                sourceText={subtitleUr}
+                targetLang="en"
+                onTranslated={(t) => setSubtitleEn(t)}
+              />
+            </div>
             <input
               type="text"
               value={subtitleEn}
@@ -301,9 +325,16 @@ export default function HamdManager({ onToast }: Props) {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">
-              Subtitle (اردو ذیلی عنوان)
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-stone-700 uppercase">
+                Subtitle (اردو ذیلی عنوان)
+              </label>
+              <AutoTranslateButton
+                sourceText={subtitleEn}
+                targetLang="ur"
+                onTranslated={(t) => setSubtitleUr(t)}
+              />
+            </div>
             <input
               type="text"
               dir="rtl"

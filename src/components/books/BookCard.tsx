@@ -3,6 +3,7 @@
 import React from 'react';
 import { BookItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
+import { getStorageUrl } from '@/lib/supabase/storage';
 import { BookOpen, Download, Lock, Calendar, FileText, Eye } from 'lucide-react';
 
 interface BookCardProps {
@@ -14,15 +15,18 @@ interface BookCardProps {
 export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCardProps) {
   const { language, t } = useLanguage();
   const isRestricted = book.visibility === 'restricted';
+  const coverUrl = getStorageUrl(book.cover_path);
+  const fileUrl = getStorageUrl(book.file_path);
 
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault();
     if (isRestricted) {
       if (onRequestAccess) onRequestAccess(book.title_en);
-    } else if (book.file_path) {
+    } else if (fileUrl) {
       const link = document.createElement('a');
-      link.href = book.file_path;
+      link.href = fileUrl;
       link.download = `${book.title_en}.pdf`;
+      link.target = '_blank';
       link.click();
     }
   };
@@ -31,7 +35,7 @@ export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCa
     if (isRestricted) {
       if (onRequestAccess) onRequestAccess(book.title_en);
     } else if (onReadOnline) {
-      onReadOnline(book);
+      onReadOnline({ ...book, file_path: fileUrl });
     }
   };
 
@@ -39,9 +43,9 @@ export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCa
     <div className="flex flex-col sm:flex-row bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-lg transition-all group">
       {/* Book Cover */}
       <div className="sm:w-52 h-64 sm:h-auto relative bg-gradient-to-br from-amber-950 to-stone-900 shrink-0 flex items-center justify-center p-4">
-        {book.cover_path ? (
+        {coverUrl ? (
           <img
-            src={book.cover_path}
+            src={coverUrl}
             alt={book.title_en}
             className="max-w-full max-h-full object-contain rounded-md shadow-md group-hover:scale-105 transition-transform duration-300"
           />

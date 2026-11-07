@@ -1,97 +1,157 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createSessionClient } from '@/lib/supabase/server';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const ip = getClientIp(req);
+    const rateCheck = checkRateLimit(`access_req_${ip}`, {
+      maxRequests: 5,
+      windowMs: 60_000,
+    });
+
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait a minute before submitting again.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateCheck.reset),
+          },
+        }
+      );
+    }
+
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
     const { name, email, resource_type, reason, resource_id } = body;
 
-    if (!email || !reason) {
+    if (!email || typeof email !== 'string' || !reason || typeof reason !== 'string') {
       return NextResponse.json(
-        { error: 'Email and reason are required' },
+        { error: 'Valid email and research purpose/reason are required' },
         { status: 400 }
       );
     }
 
-    const cleanName = (name || email.split('@')[0]).trim();
     const cleanEmail = email.trim().toLowerCase();
-    const validResourceType = ['all', 'gallery', 'books', 'poetry', 'video'].includes(
-      resource_type?.toLowerCase()
-    )
-      ? resource_type.toLowerCase()
-      : 'all';
-
-    const supabase = createAdminClient();
-
-    // 1. Check if user already exists in auth.users
-    let userId: string | null = null;
-    const { data: existingUsers } = await supabase.auth.admin.listUsers();
-    const existing = existingUsers?.users?.find(
-      (u) => u.email?.toLowerCase() === cleanEmail
-    );
-
-    if (existing) {
-      userId = existing.id;
-    } else {
-      // 2. Create the user profile account
-      const { data: newUser, error: createError } =
-        await supabase.auth.admin.createUser({
-          email: cleanEmail,
-          email_confirm: true,
-          user_metadata: { full_name: cleanName },
-        });
-
-      if (!createError && newUser?.user) {
-        userId = newUser.user.id;
-      }
-    }
-
-    if (!userId) {
-      // Fallback: check public.profiles directly
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', cleanEmail)
-        .maybeSingle();
-
-      if (profile) userId = profile.id;
-    }
-
-    if (!userId) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
       return NextResponse.json(
-        { error: 'Could not register user record for this request' },
-        { status: 500 }
+        { error: 'Please provide a valid email address' },
+        { status: 400 }
       );
     }
 
-    // 3. Insert access request
-    const { data, error } = await supabase
-      .from('access_requests')
-      .insert([
-        {
-          user_id: userId,
-          user_name: cleanName,
-          user_email: cleanEmail,
-          resource_type: validResourceType,
-          resource_id: resource_id || null,
-          reason: reason.trim(),
-          status: 'pending',
-          requested_at: new Date().toISOString(),
-        },
-      ])
-      .select()
-      .single();
+    const cleanName = (typeof name === 'string' && name.trim()) || cleanEmail.split('@')[0];
+    const validResourceType = ['all', 'gallery', 'books', 'poetry', 'video'].includes(
+      String(resource_type).toLowerCase()
+    )
+      ? String(resource_type).toLowerCase()
+      : 'all';
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    let userId: string | null = null;
+
+    // Attempt admin user provisioning if service role is configured
+    try {
+      const adminSupabase = createAdminClient();
+
+      // 1. Check if user already exists
+      const { data: existingUsers } = await adminSupabase.auth.admin.listUsers();
+      const existing = existingUsers?.users?.find(
+        (u) => u.email?.toLowerCase() === cleanEmail
+      );
+
+      if (existing) {
+        userId = existing.id;
+      } else {
+        // 2. Create the user profile account
+        const { data: newUser, error: createError } =
+          await adminSupabase.auth.admin.createUser({
+            email: cleanEmail,
+            email_confirm: true,
+            user_metadata: { full_name: cleanName },
+          });
+
+        if (!createError && newUser?.user) {
+          userId = newUser.user.id;
+        }
+      }
+
+      if (!userId) {
+        const { data: profile } = await adminSupabase
+          .from('profiles')
+          .select('id')
+          .eq('email', cleanEmail)
+          .maybeSingle();
+
+        if (profile) userId = profile.id;
+      }
+
+      // 3. Insert access request via admin client
+      const { data, error } = await adminSupabase
+        .from('access_requests')
+        .insert([
+          {
+            user_id: userId,
+            user_name: cleanName,
+            user_email: cleanEmail,
+            resource_type: validResourceType,
+            resource_id: typeof resource_id === 'string' ? resource_id : null,
+            reason: reason.trim(),
+            status: 'pending',
+            requested_at: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, data });
+    } catch (adminErr) {
+      // If service role key is not configured, fall back to session client
+      console.warn('Admin client unavailable for access request provisioning:', adminErr);
+
+      const sessionClient = await createSessionClient();
+      if (!sessionClient) {
+        return NextResponse.json(
+          { error: 'Database service is temporarily unavailable. Please try again later.' },
+          { status: 503 }
+        );
+      }
+
+      const { data, error } = await sessionClient
+        .from('access_requests')
+        .insert([
+          {
+            user_name: cleanName,
+            user_email: cleanEmail,
+            resource_type: validResourceType,
+            resource_id: typeof resource_id === 'string' ? resource_id : null,
+            reason: reason.trim(),
+            status: 'pending',
+            requested_at: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, data });
     }
-
-    return NextResponse.json({ success: true, data });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Server error' },
+      { error: err instanceof Error ? err.message : 'Server error occurred' },
       { status: 500 }
     );
   }
 }
-

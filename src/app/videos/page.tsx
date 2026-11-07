@@ -45,7 +45,7 @@ export default function VideosPage() {
         .from('videos')
         .select('*')
         .order('sort_order', { ascending: true });
-      if (!error) setVideos((data || []).filter((v) => v.published));
+      if (!error) setVideos((data || []).filter((v) => v.published !== false));
       setLoading(false);
     };
     load();

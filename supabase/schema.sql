@@ -151,6 +151,30 @@ create table if not exists public.videos (
 );
 
 -- ==============================================================================
+-- 7. AUDIT LOGS TABLE (Administrative Actions & Security Tracking)
+-- ==============================================================================
+create table if not exists public.audit_logs (
+  id uuid default gen_random_uuid() primary key,
+  admin_id uuid references auth.users on delete set null,
+  action text not null check (action in ('create', 'update', 'delete', 'approve', 'reject', 'login')),
+  entity_type text not null check (entity_type in ('poetry', 'book', 'gallery', 'video', 'access_request', 'profile', 'hamd')),
+  entity_id text,
+  metadata jsonb default '{}'::jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- ==============================================================================
+-- PERFORMANCE INDEXES (Optimizing High-Volume Queries)
+-- ==============================================================================
+create index if not exists idx_content_type_published on public.content (type, published, created_at desc);
+create index if not exists idx_books_published on public.books (published, created_at desc);
+create index if not exists idx_gallery_sort on public.gallery (sort_order asc);
+create index if not exists idx_videos_published_sort on public.videos (published, sort_order asc);
+create index if not exists idx_access_requests_status on public.access_requests (status, requested_at desc);
+create index if not exists idx_audit_logs_created on public.audit_logs (created_at desc);
+create index if not exists idx_audit_logs_action on public.audit_logs (action, entity_type);
+
+-- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ==============================================================================
 
@@ -159,6 +183,7 @@ alter table public.content enable row level security;
 alter table public.books enable row level security;
 alter table public.gallery enable row level security;
 alter table public.access_requests enable row level security;
+alter table public.audit_logs enable row level security;
 
 -- Helper function to check if current authenticated user is an admin
 create or replace function public.is_admin()
@@ -200,11 +225,11 @@ create policy "Admins can manage all profiles"
 
 -- CONTENT POLICIES
 drop policy if exists "Public can view published public content" on public.content;
-create policy "Public can view published public content"
+drop policy if exists "Public can view published content" on public.content;
+create policy "Public can view published content"
   on public.content for select
   using (
-    (published = true and visibility = 'public') or
-    (published = true and visibility = 'restricted' and public.is_approved()) or
+    published = true or
     public.is_admin()
   );
 
@@ -215,11 +240,11 @@ create policy "Admins can do everything on content"
 
 -- BOOKS POLICIES
 drop policy if exists "Public can view published public books" on public.books;
-create policy "Public can view published public books"
+drop policy if exists "Public can view published books" on public.books;
+create policy "Public can view published books"
   on public.books for select
   using (
-    (published = true and visibility = 'public') or
-    (published = true and visibility = 'restricted' and public.is_approved()) or
+    published = true or
     public.is_admin()
   );
 
@@ -230,13 +255,10 @@ create policy "Admins can do everything on books"
 
 -- GALLERY POLICIES
 drop policy if exists "Public can view public gallery photos" on public.gallery;
-create policy "Public can view public gallery photos"
+drop policy if exists "Public can view gallery photos" on public.gallery;
+create policy "Public can view gallery photos"
   on public.gallery for select
-  using (
-    visibility = 'public' or
-    (visibility = 'restricted' and public.is_approved()) or
-    public.is_admin()
-  );
+  using (true);
 
 drop policy if exists "Admins can do everything on gallery" on public.gallery;
 create policy "Admins can do everything on gallery"
@@ -250,9 +272,10 @@ create policy "Users can view their own access requests"
   using (auth.uid() = user_id or public.is_admin());
 
 drop policy if exists "Authenticated users can submit access requests" on public.access_requests;
-create policy "Authenticated users can submit access requests"
+drop policy if exists "Anyone can submit access requests" on public.access_requests;
+create policy "Anyone can submit access requests"
   on public.access_requests for insert
-  with check (auth.uid() = user_id);
+  with check (true);
 
 drop policy if exists "Admins can update access requests (approve/reject)" on public.access_requests;
 create policy "Admins can update access requests (approve/reject)"
@@ -263,6 +286,17 @@ drop policy if exists "Admins can delete access requests" on public.access_reque
 create policy "Admins can delete access requests"
   on public.access_requests for delete
   using (public.is_admin());
+
+-- AUDIT LOGS POLICIES
+drop policy if exists "Admins can view audit logs" on public.audit_logs;
+create policy "Admins can view audit logs"
+  on public.audit_logs for select
+  using (public.is_admin());
+
+drop policy if exists "Admins can insert audit logs" on public.audit_logs;
+create policy "Admins can insert audit logs"
+  on public.audit_logs for insert
+  with check (public.is_admin());
 
 -- ==============================================================================
 -- ENCRYPTION SUPPORT ON EXISTING TABLES
