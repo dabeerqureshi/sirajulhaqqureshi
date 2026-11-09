@@ -33,7 +33,7 @@ export default function GalleryPage() {
         .order('sort_order', { ascending: true });
 
       if (!error && data && data.length > 0) {
-        setItems(data);
+        setItems(data.filter((item) => Boolean(item.file_path || item.title_en || item.title_ur)));
       } else {
         setItems(mockGallery);
       }

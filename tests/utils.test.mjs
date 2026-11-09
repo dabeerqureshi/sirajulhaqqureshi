@@ -38,13 +38,30 @@ test('Storage Utils - getStorageUrl and extractStoragePath', () => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://demo.supabase.co';
 
   function getStorageUrl(path, bucket = 'public-assets') {
-    if (!path) return '';
-    if (/^(https?:|data:|blob:)/i.test(path)) return path;
-    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (!base) return path;
-    const clean = path.replace(/^\/+/, '');
+    if (!path || typeof path !== 'string') return '';
+    const trimmed = path.trim();
+    if (!trimmed) return '';
+    if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
+    const rawBase = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!rawBase) return trimmed;
+    const base = rawBase.replace(/\/+$/, '');
+    let clean = trimmed.replace(/^\/+/, '');
+    const storageMarker = 'storage/v1/object/';
+    if (clean.startsWith(storageMarker)) {
+      return `${base}/${clean}`;
+    }
     const within = clean.startsWith(`${bucket}/`) ? clean.slice(bucket.length + 1) : clean;
-    return `${base.replace(/\/+$/, '')}/storage/v1/object/public/${bucket}/${within}`;
+    const safeWithin = within
+      .split('/')
+      .map((segment) => {
+        try {
+          return encodeURIComponent(decodeURIComponent(segment));
+        } catch {
+          return encodeURIComponent(segment);
+        }
+      })
+      .join('/');
+    return `${base}/storage/v1/object/public/${bucket}/${safeWithin}`;
   }
 
   function extractStoragePath(urlOrPath, bucket = 'public-assets') {
@@ -83,6 +100,18 @@ test('Storage Utils - getStorageUrl and extractStoragePath', () => {
   // Preserves external URLs and data URLs
   assert.equal(getStorageUrl('https://images.unsplash.com/photo.jpg'), 'https://images.unsplash.com/photo.jpg');
   assert.equal(getStorageUrl('data:image/png;base64,...'), 'data:image/png;base64,...');
+
+  // Handles already-prefixed storage paths
+  assert.equal(
+    getStorageUrl('storage/v1/object/public/public-assets/gallery/photo1.jpg'),
+    'https://demo.supabase.co/storage/v1/object/public/public-assets/gallery/photo1.jpg'
+  );
+
+  // Handles filenames with spaces
+  assert.equal(
+    getStorageUrl('gallery/mushaira event 1980.jpg'),
+    'https://demo.supabase.co/storage/v1/object/public/public-assets/gallery/mushaira%20event%201980.jpg'
+  );
 
   // Extracts storage path correctly
   assert.equal(

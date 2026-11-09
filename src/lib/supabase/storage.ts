@@ -5,23 +5,46 @@
  *  - Data URLs (data:image/..., data:application/pdf...)
  *  - Blobs (blob:...)
  *  - Storage paths (books/xyz.pdf, gallery/xyz.jpg, public-assets/...)
+ *  - Path segments with special characters or spaces
+ *  - Paths that already contain /storage/v1/object/public/...
  */
 export function getStorageUrl(
   path: string | null | undefined,
   bucket = 'public-assets'
 ): string {
-  if (!path) return '';
-  if (/^(https?:|data:|blob:)/i.test(path)) return path;
+  if (!path || typeof path !== 'string') return '';
+  const trimmed = path.trim();
+  if (!trimmed) return '';
+  if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
 
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!base) return path;
+  const rawBase = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!rawBase) return trimmed;
+  const base = rawBase.replace(/\/+$/, '');
 
-  const clean = path.replace(/^\/+/, '');
+  const clean = trimmed.replace(/^\/+/, '');
+
+  // If path is already a storage object URL path (e.g. storage/v1/object/public/...)
+  const storageMarker = 'storage/v1/object/';
+  if (clean.startsWith(storageMarker)) {
+    return `${base}/${clean}`;
+  }
+
   const within = clean.startsWith(`${bucket}/`)
     ? clean.slice(bucket.length + 1)
     : clean;
 
-  return `${base.replace(/\/+$/, '')}/storage/v1/object/public/${bucket}/${within}`;
+  const safeWithin = within
+    .split('/')
+    .map((segment) => {
+      try {
+        return encodeURIComponent(decodeURIComponent(segment));
+      } catch {
+        return encodeURIComponent(segment);
+      }
+    })
+    .join('/');
+
+  return `${base}/storage/v1/object/public/${bucket}/${safeWithin}`;
 }
 
 /**
@@ -32,28 +55,29 @@ export function extractStoragePath(
   urlOrPath: string | null | undefined,
   bucket = 'public-assets'
 ): string | null {
-  if (!urlOrPath) return null;
-  if (urlOrPath.startsWith('data:') || urlOrPath.startsWith('blob:')) return null;
+  if (!urlOrPath || typeof urlOrPath !== 'string') return null;
+  const trimmed = urlOrPath.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) return null;
 
   const publicMarker = `/storage/v1/object/public/${bucket}/`;
   const signMarker = `/storage/v1/object/sign/${bucket}/`;
 
-  if (urlOrPath.includes(publicMarker)) {
-    return decodeURIComponent(urlOrPath.split(publicMarker)[1].split('?')[0]);
+  if (trimmed.includes(publicMarker)) {
+    return decodeURIComponent(trimmed.split(publicMarker)[1].split('?')[0]);
   }
-  if (urlOrPath.includes(signMarker)) {
-    return decodeURIComponent(urlOrPath.split(signMarker)[1].split('?')[0]);
+  if (trimmed.includes(signMarker)) {
+    return decodeURIComponent(trimmed.split(signMarker)[1].split('?')[0]);
   }
 
   // If it's an external URL (http) not on this Supabase project, skip
-  if (/^https?:\/\//i.test(urlOrPath)) {
+  if (/^https?:\/\//i.test(trimmed)) {
     const supabaseBase = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (!supabaseBase || !urlOrPath.startsWith(supabaseBase)) {
+    if (!supabaseBase || !trimmed.startsWith(supabaseBase)) {
       return null;
     }
   }
 
-  const clean = urlOrPath.replace(/^\/+/, '');
+  const clean = trimmed.replace(/^\/+/, '');
   return clean.startsWith(`${bucket}/`) ? clean.slice(bucket.length + 1) : clean;
 }
-

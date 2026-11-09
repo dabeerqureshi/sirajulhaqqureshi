@@ -82,6 +82,7 @@ export default function AdminPage() {
   // Edit Modal State
   const [editingItem, setEditingItem] = useState<EditingItem | null>(null);
   const [editPhotoFile, setEditPhotoFile] = useState<string | null>(null);
+  const [editPhotoRawFile, setEditPhotoRawFile] = useState<File | null>(null);
   const [updating, setUpdating] = useState(false);
 
   const showToast = (msg: string) => {
@@ -376,6 +377,9 @@ export default function AdminPage() {
             .from('public-assets')
             .getPublicUrl(storagePath);
           finalPhotoPath = publicUrl;
+        } else {
+          console.warn('Storage upload warning:', uploadError);
+          showToast(`Storage upload note: ${uploadError.message}. Photo saved with direct link.`);
         }
       }
 
@@ -740,7 +744,23 @@ export default function AdminPage() {
         setVideosList((prev) => prev.map((v) => (v.id === item.id ? { ...v, ...updates } : v)));
         showToast('Video updated successfully in Supabase!');
       } else if (type === 'gallery') {
-        const filePath = (editPhotoFile || (formData.get('file_path') as string) || '').trim();
+        let filePath = (editPhotoFile || (formData.get('file_path') as string) || '').trim();
+        if (editPhotoRawFile) {
+          const safeName = editPhotoRawFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `gallery/${Date.now()}-${safeName}`;
+          const { error: uploadErr } = await supabase.storage
+            .from('public-assets')
+            .upload(storagePath, editPhotoRawFile, {
+              contentType: editPhotoRawFile.type || 'image/jpeg',
+              upsert: true,
+            });
+          if (!uploadErr) {
+            const { data: { publicUrl } } = supabase.storage
+              .from('public-assets')
+              .getPublicUrl(storagePath);
+            filePath = publicUrl;
+          }
+        }
         const updates = {
           title_en: (formData.get('title_en') as string).trim(),
           title_ur: (formData.get('title_ur') as string).trim(),
@@ -798,6 +818,7 @@ export default function AdminPage() {
       }
       setEditingItem(null);
       setEditPhotoFile(null);
+      setEditPhotoRawFile(null);
     } catch (err) {
       showToast(`Update failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -2894,6 +2915,7 @@ export default function AdminPage() {
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              setEditPhotoRawFile(file);
                               const reader = new FileReader();
                               reader.onload = (uploadEvent) => {
                                 if (typeof uploadEvent.target?.result === 'string') {
