@@ -55,6 +55,26 @@ export async function POST(req: Request) {
 
     let userId: string | null = null;
 
+    const insertPayload: {
+      user_id: string | null;
+      user_name: string;
+      user_email: string;
+      resource_type: string;
+      resource_id: string | null;
+      reason: string;
+      status: 'pending';
+      requested_at: string;
+    } = {
+      user_id: null,
+      user_name: cleanName,
+      user_email: cleanEmail,
+      resource_type: validResourceType,
+      resource_id: typeof resource_id === 'string' ? resource_id : null,
+      reason: reason.trim(),
+      status: 'pending',
+      requested_at: new Date().toISOString(),
+    };
+
     // Attempt admin user provisioning if service role is configured
     try {
       const adminSupabase = createAdminClient();
@@ -91,31 +111,21 @@ export async function POST(req: Request) {
         if (profile) userId = profile.id;
       }
 
-      // 3. Insert access request via admin client
-      const { data, error } = await adminSupabase
+      insertPayload.user_id = userId;
+
+      // 3. Insert access request via admin client (omit .select() so PostgreSQL
+      // does not evaluate SELECT RLS policies on the returned row)
+      const { error } = await adminSupabase
         .from('access_requests')
-        .insert([
-          {
-            user_id: userId,
-            user_name: cleanName,
-            user_email: cleanEmail,
-            resource_type: validResourceType,
-            resource_id: typeof resource_id === 'string' ? resource_id : null,
-            reason: reason.trim(),
-            status: 'pending',
-            requested_at: new Date().toISOString(),
-          },
-        ])
-        .select()
-        .single();
+        .insert([insertPayload]);
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        throw error;
       }
 
-      return NextResponse.json({ success: true, data });
+      return NextResponse.json({ success: true });
     } catch (adminErr) {
-      // If service role key is not configured, fall back to session client
+      // If service role key is not configured or failed, fall back to session client
       console.warn('Admin client unavailable for access request provisioning:', adminErr);
 
       const sessionClient = await createSessionClient();
@@ -126,27 +136,28 @@ export async function POST(req: Request) {
         );
       }
 
-      const { data, error } = await sessionClient
+      // If user is currently signed in, link their auth user id
+      if (!insertPayload.user_id) {
+        try {
+          const { data: { user } } = await sessionClient.auth.getUser();
+          if (user) {
+            insertPayload.user_id = user.id;
+          }
+        } catch {
+          // guest user without session
+        }
+      }
+
+      // Omit .select() so PostgreSQL does not trigger SELECT RLS on the returning row
+      const { error } = await sessionClient
         .from('access_requests')
-        .insert([
-          {
-            user_name: cleanName,
-            user_email: cleanEmail,
-            resource_type: validResourceType,
-            resource_id: typeof resource_id === 'string' ? resource_id : null,
-            reason: reason.trim(),
-            status: 'pending',
-            requested_at: new Date().toISOString(),
-          },
-        ])
-        .select()
-        .single();
+        .insert([insertPayload]);
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      return NextResponse.json({ success: true, data });
+      return NextResponse.json({ success: true });
     }
   } catch (err) {
     return NextResponse.json(

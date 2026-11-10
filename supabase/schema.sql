@@ -114,7 +114,7 @@ create table if not exists public.gallery (
 -- Allows visitors/registered users to request access to restricted galleries or books
 create table if not exists public.access_requests (
   id uuid default gen_random_uuid() primary key,
-  user_id uuid references public.profiles(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade,
   user_name text not null,
   user_email text not null,
   resource_type text not null check (resource_type in ('all', 'gallery', 'books', 'poetry')),
@@ -266,15 +266,22 @@ create policy "Admins can do everything on gallery"
   using (public.is_admin());
 
 -- ACCESS REQUESTS POLICIES
+alter table public.access_requests alter column user_id drop not null;
+
 drop policy if exists "Users can view their own access requests" on public.access_requests;
 create policy "Users can view their own access requests"
   on public.access_requests for select
-  using (auth.uid() = user_id or public.is_admin());
+  using (
+    (auth.uid() is not null and auth.uid() = user_id)
+    or public.is_admin()
+  );
 
 drop policy if exists "Authenticated users can submit access requests" on public.access_requests;
 drop policy if exists "Anyone can submit access requests" on public.access_requests;
+drop policy if exists "Enable insert for all users" on public.access_requests;
 create policy "Anyone can submit access requests"
   on public.access_requests for insert
+  to public
   with check (true);
 
 drop policy if exists "Admins can update access requests (approve/reject)" on public.access_requests;
