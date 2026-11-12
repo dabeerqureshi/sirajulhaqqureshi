@@ -1,33 +1,52 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import Image from 'next/image';
 import { ContentItem, PoetryVerse } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
-import { getStorageUrl } from '@/lib/supabase/storage';
 import {
   Lock,
   Feather,
   Sparkles,
+  BookOpen,
   FileText,
+  Maximize2,
+  X,
   Calendar,
-  Clock,
 } from 'lucide-react';
-import InlinePoetryReader from '@/components/poetry/InlinePoetryReader';
+import PdfReaderModal from '@/components/poetry/PdfReaderModal';
 
 interface PoetryCardProps {
   poetry: ContentItem;
-  onRequestAccess?: (title: string, id?: string) => void;
+  onRequestAccess?: (title: string) => void;
+}
+
+/**
+ * Resolve a stored media path (or URL / data URL) to a browser-usable URL.
+ */
+function resolveMediaUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (/^(https?:|data:|blob:)/i.test(path)) return path;
+
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
+
+  const clean = path.replace(/^\/+/, '');
+  const within = clean.startsWith('public-assets/')
+    ? clean.slice('public-assets/'.length)
+    : clean;
+
+  return `${base.replace(/\/+$/, '')}/storage/v1/object/public/public-assets/${within}`;
 }
 
 export default function PoetryCard({ poetry, onRequestAccess }: PoetryCardProps) {
   const { language } = useLanguage();
-  const { hasAccess, hasPendingRequestFor } = useAuth();
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
-  const isRestricted = !hasAccess && poetry.visibility === 'restricted';
-  const isPending = hasPendingRequestFor('poetry', poetry.id);
+  const isRestricted = poetry.visibility === 'restricted';
   const mediaPath = poetry.cover_image || poetry.file_path || null;
-  const resolvedUrl = mediaPath ? getStorageUrl(mediaPath) : null;
+  const resolvedUrl = resolveMediaUrl(mediaPath);
 
   const isPdf = Boolean(
     resolvedUrl &&
@@ -118,20 +137,13 @@ export default function PoetryCard({ poetry, onRequestAccess }: PoetryCardProps)
                   ? 'یہ کلام نجی ذخیرے میں محفوظ ہے۔ مطالعہ کے لیے رسائی درکار ہے۔'
                   : 'This poem is reserved in the private collection. Request access to read.'}
               </p>
-              {isPending ? (
-                <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium">
-                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
-                  <span>{language === 'ur' ? 'درخواست زیرِ غور' : 'Access Pending'}</span>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onRequestAccess && onRequestAccess(poetry.title_en || poetry.title_ur, poetry.id)}
-                  className="px-4 py-1.5 bg-amber-800 text-white rounded-lg text-xs font-medium hover:bg-amber-900 transition-colors shadow-xs cursor-pointer"
-                >
-                  {language === 'ur' ? 'رسائی کی درخواست کریں' : 'Request Access'}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => onRequestAccess && onRequestAccess(poetry.title_en || poetry.title_ur)}
+                className="px-4 py-1.5 bg-amber-800 text-white rounded-lg text-xs font-medium hover:bg-amber-900 transition-colors shadow-xs"
+              >
+                {language === 'ur' ? 'رسائی کی درخواست کریں' : 'Request Access'}
+              </button>
             </div>
             <div className="filter blur-sm select-none opacity-40 space-y-4">
               <p className="font-urdu text-lg">رازِ نہاں جو سینے میں موجزن رہا</p>
@@ -139,16 +151,87 @@ export default function PoetryCard({ poetry, onRequestAccess }: PoetryCardProps)
             </div>
           </div>
         ) : (
-          /* Public Interactive Inline Reader (Scroll, Zoom, Minimize, Maximize) */
-          <div className="my-4">
-            <InlinePoetryReader
-              title={displayTitle}
-              documentUrl={resolvedUrl}
-              isPdf={isPdf}
-              isImage={isImage}
-              verses={validVerses}
-              downloadUrl={resolvedUrl}
-            />
+          <div className="space-y-4 my-3">
+            {/* Attached Manuscript Artwork/Image if present */}
+            {isImage && resolvedUrl && (
+              <div className="relative group rounded-xl overflow-hidden border border-stone-200 bg-stone-100 max-h-56 flex items-center justify-center">
+                <Image
+                  src={resolvedUrl}
+                  alt={displayTitle}
+                  width={500}
+                  height={300}
+                  className="max-h-56 w-full object-contain transition-transform duration-300 group-hover:scale-102"
+                  unoptimized={resolvedUrl.startsWith('data:')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsImageModalOpen(true)}
+                  className="absolute inset-0 bg-stone-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white text-xs font-semibold"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                  <span>{language === 'ur' ? 'مکمل مسودہ دیکھیں' : 'View Full Manuscript'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Attached Manuscript PDF Banner if present */}
+            {isPdf && resolvedUrl && (
+              <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/60 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-stone-800 truncate">
+                      {language === 'ur' ? 'اصل قلمی مسودہ (PDF)' : 'Handwritten Manuscript (PDF)'}
+                    </p>
+                    <p className="text-[11px] text-stone-500">
+                      {language === 'ur' ? 'آن لائن مطالعہ کے لیے دستیاب' : 'Preserved archival document'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsPdfModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-800 hover:bg-amber-700 text-white text-xs font-semibold transition-colors shadow-xs"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-amber-200" />
+                    <span>{language === 'ur' ? 'آن لائن پڑھیں' : 'Read In-App'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Verses / Couplets */}
+            {validVerses.length > 0 ? (
+              <div className="space-y-4">
+                {validVerses.map((verse, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-stone-50/70 p-4 rounded-xl border border-stone-100 text-center"
+                  >
+                    {/* Urdu verse (Nastaliq centered) */}
+                    {verse.ur && (
+                      <p className="font-urdu text-xl sm:text-2xl text-stone-900 leading-loose whitespace-pre-line py-1">
+                        {verse.ur}
+                      </p>
+                    )}
+                    {/* English poetic translation */}
+                    {verse.en && (
+                      <p className="text-xs sm:text-sm font-serif italic text-stone-600 border-t border-stone-200/60 pt-2.5 mt-2 whitespace-pre-line">
+                        &ldquo;{verse.en}&rdquo;
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : !isImage && !isPdf ? (
+              <div className="bg-stone-50/60 p-4 rounded-xl border border-dashed border-stone-200 text-center text-xs text-stone-500">
+                {language === 'ur' ? 'متن جلد شامل کیا جائے گا' : 'Text transcription in compilation'}
+              </div>
+            ) : null}
           </div>
         )}
       </div>
@@ -165,10 +248,64 @@ export default function PoetryCard({ poetry, onRequestAccess }: PoetryCardProps)
             : 'Archive'}
         </span>
 
-        <span className="text-amber-800 font-medium">
-          {isPdf ? (language === 'ur' ? 'پی ڈی ایف مسودہ' : 'PDF Document') : isImage ? (language === 'ur' ? 'تصویری مسودہ' : 'Scan') : (language === 'ur' ? 'منظوم کلام' : 'Verses')}
-        </span>
+        {isImage && resolvedUrl && (
+          <button
+            type="button"
+            onClick={() => setIsImageModalOpen(true)}
+            className="text-amber-800 hover:text-amber-900 font-medium inline-flex items-center gap-1"
+          >
+            <Maximize2 className="w-3 h-3" />
+            <span>{language === 'ur' ? 'مسودہ' : 'View Manuscript'}</span>
+          </button>
+        )}
       </div>
+
+      {/* PDF Viewer Modal */}
+      {isPdf && resolvedUrl && (
+        <PdfReaderModal
+          isOpen={isPdfModalOpen}
+          url={resolvedUrl}
+          title={displayTitle}
+          onClose={() => setIsPdfModalOpen(false)}
+        />
+      )}
+
+      {/* Image Manuscript Preview Modal */}
+      {isImage && resolvedUrl && isImageModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/90 backdrop-blur-xs p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="relative max-w-4xl max-h-[90vh] bg-stone-900 rounded-2xl overflow-hidden border border-stone-700 flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-stone-800 bg-stone-950 text-white">
+              <span className="text-sm font-semibold truncate">{displayTitle}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-amber-400 font-medium px-2 py-0.5 rounded bg-stone-900 border border-stone-800">
+                  {language === 'ur' ? 'قلمی عکس' : 'Manuscript Scan'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsImageModalOpen(false)}
+                  className="p-1.5 rounded-lg text-stone-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-2 overflow-auto flex items-center justify-center">
+              <Image
+                src={resolvedUrl}
+                alt={displayTitle}
+                width={1200}
+                height={900}
+                className="max-h-[80vh] w-auto object-contain rounded-lg shadow-lg"
+                unoptimized={resolvedUrl.startsWith('data:')}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   );
 }
