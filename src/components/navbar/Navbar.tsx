@@ -4,10 +4,12 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useLanguage } from '@/context/LanguageContext';
-import { Menu, X, Globe } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { Menu, X, Globe, Shield } from 'lucide-react';
 
 export default function Navbar() {
   const { language, setLanguage, t } = useLanguage();
+  const { isAdmin } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
 
@@ -65,10 +67,20 @@ export default function Navbar() {
 
           {/* Right Action Buttons */}
           <div className="hidden md:flex items-center gap-3">
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-800 text-white hover:bg-amber-900 text-xs font-semibold shadow-xs transition-colors"
+              >
+                <Shield className="w-3.5 h-3.5 text-amber-200" />
+                <span>{language === 'ur' ? 'ایڈمن' : 'Admin'}</span>
+              </Link>
+            )}
+
             {/* Language Switcher */}
             <button
               onClick={toggleLanguage}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 text-xs font-semibold shadow-xs transition-all hover:border-amber-500"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 text-xs font-semibold shadow-xs transition-all hover:border-amber-500 cursor-pointer"
               title="Switch Language"
             >
               <Globe className="w-3.5 h-3.5 text-amber-700" />
@@ -113,6 +125,16 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100"
+            >
+              <Shield className="w-4 h-4 text-amber-700" />
+              <span>{language === 'ur' ? 'ایڈمن پینل' : 'Admin Dashboard'}</span>
+            </Link>
+          )}
         </div>
       )}
     </header>

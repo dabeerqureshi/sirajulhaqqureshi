@@ -22,6 +22,7 @@ class AccessRequestEngine {
 
   submitRequest({ name, email, resource_type, resource_id, reason }) {
     const cleanEmail = email.trim().toLowerCase();
+    const cleanName = (typeof name === 'string' && name.trim()) || cleanEmail.split('@')[0];
 
     // 1. Check existing permissions: User already has access
     const existingProfile = Array.from(this.profiles.values()).find((p) => p.email === cleanEmail);
@@ -49,6 +50,7 @@ class AccessRequestEngine {
     const newRequest = {
       id: reqId,
       user_id: existingProfile?.id || null,
+      user_name: cleanName,
       user_email: cleanEmail,
       resource_type,
       resource_id: resource_id || null,

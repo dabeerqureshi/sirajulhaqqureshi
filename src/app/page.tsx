@@ -21,6 +21,7 @@ export default function HomePage() {
   const { language, t } = useLanguage();
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedItemTitle, setSelectedItemTitle] = useState('');
+  const [selectedItemId, setSelectedItemId] = useState<string | undefined>(undefined);
   const [activeReadingBook, setActiveReadingBook] = useState<BookItem | null>(null);
 
   const [intro, setIntro] = useState(mockIntro);
@@ -105,8 +106,9 @@ export default function HomePage() {
     loadData();
   }, []);
 
-  const handleRequestAccess = (title: string) => {
+  const handleRequestAccess = (title: string, id?: string) => {
     setSelectedItemTitle(title);
+    setSelectedItemId(id);
     setModalOpen(true);
   };
 
@@ -362,6 +364,7 @@ export default function HomePage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         resourceTitle={selectedItemTitle}
+        resourceId={selectedItemId}
       />
 
       <BookReaderModal

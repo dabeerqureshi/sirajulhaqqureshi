@@ -262,10 +262,6 @@ export default function AdminPage() {
     }
   };
 
-  const handleUpdateRequest = async (id: string, newStatus: 'approved' | 'rejected', _userId?: string) => {
-    await handleReviewRequest(id, newStatus === 'approved' ? 'approve' : 'reject');
-  };
-
   const handleDeleteRequest = async (id: string) => {
     if (!confirm('Are you sure you want to delete this access request?')) return;
     const supabase = createClient();

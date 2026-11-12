@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 import { useAuth } from '@/context/AuthContext';
 import { Lock, X, CheckCircle, Send, Loader2, Clock, AlertCircle } from 'lucide-react';
@@ -23,12 +23,18 @@ export default function AccessRequestModal({
   const { language } = useLanguage();
   const { user, hasAccess, hasPendingRequestFor, refreshAuth } = useAuth();
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const userEmail = user?.email || '';
+  const userName = (user?.user_metadata?.full_name as string) || '';
+
+  const [enteredName, setEnteredName] = useState<string | null>(null);
+  const [enteredEmail, setEnteredEmail] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const name = enteredName !== null ? enteredName : userName;
+  const email = enteredEmail !== null ? enteredEmail : userEmail;
 
   // Normalize resource category
   const normalizedResourceType = (() => {
@@ -41,17 +47,6 @@ export default function AccessRequestModal({
   })();
 
   const isAlreadyPending = hasPendingRequestFor(normalizedResourceType, resourceId);
-
-  // Prefill authenticated user info
-  useEffect(() => {
-    if (isOpen) {
-      if (user) {
-        if (user.email && !email) setEmail(user.email);
-        const metaName = (user.user_metadata?.full_name as string) || '';
-        if (metaName && !name) setName(metaName);
-      }
-    }
-  }, [isOpen, user, email, name]);
 
   if (!isOpen) return null;
 
@@ -103,8 +98,8 @@ export default function AccessRequestModal({
 
   const handleReset = () => {
     setSubmitted(false);
-    setName('');
-    setEmail('');
+    setEnteredName(null);
+    setEnteredEmail(null);
     setReason('');
     setErrorMessage(null);
     onClose();
@@ -230,7 +225,7 @@ export default function AccessRequestModal({
                   type="text"
                   required
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => setEnteredName(e.target.value)}
                   placeholder={language === 'ur' ? 'مثلاً: محمد احمد' : 'e.g. Dr. Sarah Jenkins'}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
                 />
@@ -244,7 +239,7 @@ export default function AccessRequestModal({
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => setEnteredEmail(e.target.value)}
                   placeholder="name@university.edu"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-700/30"
                 />
