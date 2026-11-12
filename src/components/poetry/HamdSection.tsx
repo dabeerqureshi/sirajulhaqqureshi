@@ -1,24 +1,27 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { FileText, RefreshCw, Sparkles } from 'lucide-react';
-import { getHamdItems, hamdDownloadUrl, hamdFileUrl } from '@/lib/data/hamd';
+import { BookOpen, FileText, RefreshCw, Sparkles } from 'lucide-react';
+import PdfReaderModal from '@/components/poetry/PdfReaderModal';
+import { getHamdItems, hamdFileUrl } from '@/lib/data/hamd';
 import { useLanguage } from '@/context/LanguageContext';
 import type { ContentItem } from '@/types/database';
-import InlinePoetryReader from '@/components/poetry/InlinePoetryReader';
 
 /**
  * "Hamd" section of the Poetry page.
- * Lists every published Hamd manuscript uploaded from the admin portal and lets
- * visitors read it directly on the website with scroll, minimize, maximize, and zoom.
+ * Lists every published Hamd PDF uploaded from the admin portal and lets
+ * visitors read it directly in the browser (inline PDF reader).
  */
 export default function HamdSection() {
   const { language } = useLanguage();
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [reading, setReading] = useState<ContentItem | null>(null);
 
   const load = useCallback(async () => {
+    // State updates happen only after the network call resolves, so the effect
+    // body never sets state synchronously.
     const { items: rows, error } = await getHamdItems();
     setLoadError(error);
     setItems(rows);
@@ -26,9 +29,11 @@ export default function HamdSection() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- getHamdItems() is an async call; setState runs after promise resolves
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- getHamdItems() is a network call; every setState in `load` runs only after its promise resolves, so there is no cascading synchronous render
     load();
   }, [load]);
+
+  const readerUrl = reading ? hamdFileUrl(reading.file_path) : null;
 
   /* ------------------------------ Loading ------------------------------ */
   if (loading) {
@@ -41,7 +46,7 @@ export default function HamdSection() {
           >
             <div className="h-4 w-28 bg-stone-200 rounded mb-6" />
             <div className="h-6 w-3/4 bg-stone-200 rounded mx-auto mb-4" />
-            <div className="h-48 bg-stone-100 rounded-xl" />
+            <div className="h-32 bg-stone-100 rounded-xl" />
             <div className="h-9 w-40 bg-stone-200 rounded-xl mt-6 mx-auto" />
           </div>
         ))}
@@ -68,7 +73,7 @@ export default function HamdSection() {
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 text-amber-300 hover:bg-stone-800 text-xs font-semibold transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          <span>{language === 'ur' ? 'دوبارہ کوشش کریں' : 'Try Again'}</span>
+          {language === 'ur' ? 'دوبارہ کوشش کریں' : 'Try Again'}
         </button>
       </div>
     );
@@ -97,47 +102,44 @@ export default function HamdSection() {
 
   /* -------------------------------- Cards -------------------------------- */
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-      {items.map((item) => {
-        const fileUrl = hamdFileUrl(item.file_path);
-        const downloadUrl = hamdDownloadUrl(item.file_path);
-        const displayTitle = language === 'ur' ? item.title_ur || item.title_en : item.title_en || item.title_ur;
-        const displaySubtitle = language === 'ur' ? item.subtitle_ur || item.subtitle_en : item.subtitle_en || item.subtitle_ur;
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {items.map((item) => {
+          const fileUrl = hamdFileUrl(item.file_path);
 
-        return (
-          <article
-            key={item.id}
-            className="relative bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden p-6 sm:p-7 flex flex-col justify-between"
-          >
-            <div>
+          return (
+            <article
+              key={item.id}
+              className="relative bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden p-6 sm:p-8 flex flex-col"
+            >
               {/* Top Bar */}
-              <div className="flex items-center justify-between border-b border-stone-100 pb-3.5 mb-4">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-4 mb-6">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-700" />
                   <span className="text-xs uppercase tracking-widest text-stone-500 font-semibold">
-                    {language === 'ur' ? 'حمدیہ کلام' : 'Sacred Hamd'}
+                    {language === 'ur' ? 'حمد' : 'Hamd'}
                   </span>
                 </div>
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {language === 'ur' ? 'مکمل مسودہ' : 'Complete Manuscript'}
+                  {language === 'ur' ? 'پڑھیں' : 'Read Online'}
                 </span>
               </div>
 
               {/* Titles */}
-              <div className="text-center mb-5">
+              <div className="text-center mb-6 flex-1">
                 <h3
                   className={`text-xl sm:text-2xl font-bold text-stone-900 ${
                     language === 'ur' ? 'font-urdu' : 'font-serif'
                   }`}
                 >
-                  {displayTitle}
+                  {language === 'ur' ? item.title_ur : item.title_en}
                 </h3>
-                {displaySubtitle && (
+                {(item.subtitle_en || item.subtitle_ur) && (
                   <p className="text-xs text-stone-500 mt-1 italic">
-                    {displaySubtitle}
+                    {language === 'ur' ? item.subtitle_ur : item.subtitle_en}
                   </p>
                 )}
-                <p className="text-[11px] text-stone-400 mt-2">
+                <p className="text-[11px] text-stone-400 mt-3">
                   {new Date(item.created_at).toLocaleDateString(
                     language === 'ur' ? 'ur-PK' : 'en-US',
                     { year: 'numeric', month: 'long', day: 'numeric' }
@@ -145,27 +147,36 @@ export default function HamdSection() {
                 </p>
               </div>
 
-              {/* Direct On-Page Document Reader */}
-              <div className="my-2">
-                <InlinePoetryReader
-                  title={displayTitle}
-                  documentUrl={fileUrl}
-                  isPdf={true}
-                  downloadUrl={downloadUrl}
-                />
+              {/* Actions */}
+              <div className="pt-4 border-t border-stone-100 flex items-center justify-center">
+                <button
+                  type="button"
+                  disabled={!fileUrl}
+                  onClick={() => setReading(item)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-800 hover:bg-amber-900 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-xs transition-colors"
+                >
+                  <BookOpen className="w-4 h-4 text-amber-200" />
+                  <span>{language === 'ur' ? 'آن لائن مسودہ پڑھیں' : 'Read Manuscript Online'}</span>
+                </button>
               </div>
-            </div>
+            </article>
+          );
+        })}
+      </div>
 
-            {/* Footer */}
-            <div className="pt-3 border-t border-stone-100 mt-4 flex items-center justify-between text-[11px] text-stone-400">
-              <span>{language === 'ur' ? 'قلمی مخطوطہ' : 'Archival PDF'}</span>
-              <span className="text-amber-800 font-medium">
-                {language === 'ur' ? 'سراج الحق قریشی کا کلام' : 'Siraj ul Haq Qureshi Archive'}
-              </span>
-            </div>
-          </article>
-        );
-      })}
-    </div>
+      {/* Inline PDF Reader */}
+      <PdfReaderModal
+        isOpen={reading !== null && readerUrl !== null}
+        url={readerUrl}
+        title={
+          reading
+            ? language === 'ur'
+              ? reading.title_ur
+              : reading.title_en
+            : ''
+        }
+        onClose={() => setReading(null)}
+      />
+    </>
   );
 }

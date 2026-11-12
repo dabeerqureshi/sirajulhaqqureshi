@@ -4,40 +4,24 @@ import React from 'react';
 import Image from 'next/image';
 import { BookItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
-import { useAuth } from '@/context/AuthContext';
 import { getStorageUrl } from '@/lib/supabase/storage';
-import { BookOpen, Download, Lock, Calendar, FileText, Eye, Clock } from 'lucide-react';
+import { BookOpen, Lock, Calendar, FileText } from 'lucide-react';
 
 interface BookCardProps {
   book: BookItem;
-  onRequestAccess?: (title: string, id?: string) => void;
+  onRequestAccess?: (title: string) => void;
   onReadOnline?: (book: BookItem) => void;
 }
 
 export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCardProps) {
   const { language, t } = useLanguage();
-  const { hasAccess, hasPendingRequestFor } = useAuth();
-  const isRestricted = !hasAccess && book.visibility === 'restricted';
-  const isPending = hasPendingRequestFor('books', book.id);
+  const isRestricted = book.visibility === 'restricted';
   const coverUrl = getStorageUrl(book.cover_path);
   const fileUrl = getStorageUrl(book.file_path);
 
-  const handleDownload = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (isRestricted) {
-      if (onRequestAccess) onRequestAccess(book.title_en, book.id);
-    } else if (fileUrl) {
-      const link = document.createElement('a');
-      link.href = fileUrl;
-      link.download = `${book.title_en}.pdf`;
-      link.target = '_blank';
-      link.click();
-    }
-  };
-
   const handleRead = () => {
     if (isRestricted) {
-      if (onRequestAccess) onRequestAccess(book.title_en, book.id);
+      if (onRequestAccess) onRequestAccess(book.title_en);
     } else if (onReadOnline) {
       onReadOnline({ ...book, file_path: fileUrl });
     }
@@ -46,7 +30,10 @@ export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCa
   return (
     <div className="flex flex-col sm:flex-row bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-lg transition-all group">
       {/* Book Cover */}
-      <div className="sm:w-52 h-64 sm:h-auto relative bg-gradient-to-br from-amber-950 to-stone-900 shrink-0 flex items-center justify-center p-4">
+      <div
+        onClick={handleRead}
+        className="sm:w-52 h-64 sm:h-auto relative bg-gradient-to-br from-amber-950 to-stone-900 shrink-0 flex items-center justify-center p-4 cursor-pointer"
+      >
         {coverUrl ? (
           <Image
             src={coverUrl}
@@ -114,36 +101,21 @@ export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCa
           </span>
 
           {isRestricted ? (
-            isPending ? (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium shadow-2xs">
-                <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
-                <span>{language === 'ur' ? 'درخواست زیرِ غور' : 'Access Pending'}</span>
-              </div>
-            ) : (
-              <button
-                onClick={() => onRequestAccess && onRequestAccess(book.title_en, book.id)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 text-amber-300 hover:bg-stone-800 text-xs font-medium shadow-xs transition-all cursor-pointer"
-              >
-                <Lock className="w-3.5 h-3.5 text-amber-400" />
-                <span>{t('requestAccess')}</span>
-              </button>
-            )
+            <button
+              onClick={() => onRequestAccess && onRequestAccess(book.title_en)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 text-amber-300 hover:bg-stone-800 text-xs font-medium shadow-xs transition-all"
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>{t('requestAccess')}</span>
+            </button>
           ) : (
             <div className="flex items-center gap-2">
               <button
                 onClick={handleRead}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 text-amber-300 text-xs font-semibold shadow-xs transition-all"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-semibold shadow-xs transition-all"
               >
-                <Eye className="w-3.5 h-3.5" />
-                <span>{t('readOnline')}</span>
-              </button>
-
-              <button
-                onClick={handleDownload}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-800 text-white hover:bg-amber-900 text-xs font-medium shadow-xs transition-all"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>{t('downloadPdf')}</span>
+                <BookOpen className="w-4 h-4 text-amber-200" />
+                <span>{language === 'ur' ? 'کتاب کا مطالعہ کریں' : 'Read Book Online'}</span>
               </button>
             </div>
           )}

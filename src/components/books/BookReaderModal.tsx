@@ -6,7 +6,6 @@ import { useLanguage } from '@/context/LanguageContext';
 import { getStorageUrl } from '@/lib/supabase/storage';
 import {
   X,
-  Download,
   BookOpen,
   ChevronLeft,
   ChevronRight,
@@ -23,16 +22,19 @@ interface BookReaderModalProps {
 }
 
 export default function BookReaderModal({ book, isOpen, onClose }: BookReaderModalProps) {
-  const { language, t } = useLanguage();
+  const { language } = useLanguage();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [zoomLevel, setZoomLevel] = useState(100);
-  const [viewMode, setViewMode] = useState<'interactive' | 'pdf'>('interactive');
+
+  const resolvedPdfUrl = book ? getStorageUrl(book.file_path) : '';
+  const hasPdf = Boolean(resolvedPdfUrl && (resolvedPdfUrl.endsWith('.pdf') || resolvedPdfUrl.includes('.pdf') || book?.file_path));
+  const [viewModeOverride, setViewModeOverride] = useState<'interactive' | 'pdf' | null>(null);
+  const viewMode = viewModeOverride ?? (hasPdf ? 'pdf' : 'interactive');
 
   if (!isOpen || !book) return null;
 
   const totalPages = book.pages_count || 120;
-  const resolvedPdfUrl = getStorageUrl(book.file_path);
 
   const handleNextPage = () => {
     if (currentPage < totalPages) setCurrentPage((prev) => prev + 1);
@@ -103,7 +105,7 @@ Across these pages, we have chronicled the milestones of a lifetime devoted to k
             {/* View Mode Toggle */}
             <div className="hidden sm:flex items-center bg-stone-800 rounded-lg p-0.5 border border-stone-700 text-xs">
               <button
-                onClick={() => setViewMode('interactive')}
+                onClick={() => setViewModeOverride('interactive')}
                 className={`px-3 py-1 rounded-md font-medium transition-all ${
                   viewMode === 'interactive' ? 'bg-amber-800 text-white shadow-xs' : 'text-stone-400 hover:text-white'
                 }`}
@@ -111,7 +113,7 @@ Across these pages, we have chronicled the milestones of a lifetime devoted to k
                 Manuscript View
               </button>
               <button
-                onClick={() => setViewMode('pdf')}
+                onClick={() => setViewModeOverride('pdf')}
                 className={`px-3 py-1 rounded-md font-medium transition-all ${
                   viewMode === 'pdf' ? 'bg-amber-800 text-white shadow-xs' : 'text-stone-400 hover:text-white'
                 }`}
@@ -120,17 +122,11 @@ Across these pages, we have chronicled the milestones of a lifetime devoted to k
               </button>
             </div>
 
-            {/* Direct Download Button */}
-            <a
-              href={resolvedPdfUrl || '#'}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-800 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{t('downloadPdf')}</span>
-            </a>
+            {/* In-Website Reader Badge */}
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-800 text-amber-300 text-xs font-semibold border border-stone-700">
+              <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+              <span>{language === 'ur' ? 'آن لائن ریڈر' : 'In-App Reader'}</span>
+            </span>
 
             {/* Fullscreen Toggle */}
             <button
@@ -158,7 +154,7 @@ Across these pages, we have chronicled the milestones of a lifetime devoted to k
             /* Embedded PDF Frame View */
             <div className="w-full h-full rounded-xl overflow-hidden border border-stone-800 bg-stone-900 shadow-2xl">
               <iframe
-                src={`${resolvedPdfUrl}#view=FitH`}
+                src={`${resolvedPdfUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
                 title={book.title_en}
                 className="w-full h-full border-none"
               />
