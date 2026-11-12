@@ -13,6 +13,7 @@ import AutoTranslateButton from '@/components/admin/AutoTranslateButton';
 import { autoTranslatePair } from '@/lib/translate';
 import { extractStoragePath } from '@/lib/supabase/storage';
 import { recordAuditLog } from '@/lib/supabase/audit';
+import { isAuthorizedAdminUser } from '@/lib/auth/admin-check';
 import {
   ShieldCheck,
   Lock,
@@ -166,14 +167,41 @@ export default function AdminPage() {
         .from('profiles')
         .select('role')
         .eq('id', session.user.id)
-        .single();
+        .maybeSingle();
 
       if (cancelled) return;
 
-      if (profile?.role !== 'admin') {
+      const isAuthorized = isAuthorizedAdminUser(session.user, profile);
+
+      if (!isAuthorized) {
         await supabase.auth.signOut();
-        router.replace('/admin/login');
+        router.replace('/admin/login?error=unauthorized');
         return;
+      }
+
+      // Auto-heal profile in DB if needed so database functions (e.g. public.is_admin()) work
+      if (isAuthorized && profile?.role !== 'admin') {
+        try {
+          if (profile) {
+            await supabase
+              .from('profiles')
+              .update({
+                role: 'admin',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', session.user.id);
+          } else {
+            await supabase.from('profiles').upsert({
+              id: session.user.id,
+              email: session.user.email || '',
+              full_name: session.user.user_metadata?.full_name || (session.user.email ? session.user.email.split('@')[0] : 'Administrator'),
+              role: 'admin',
+              updated_at: new Date().toISOString(),
+            });
+          }
+        } catch (e) {
+          console.warn('Profile sync notice in admin page:', e);
+        }
       }
 
       setCurrentSessionEmail(session.user.email || '');

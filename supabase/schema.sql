@@ -34,14 +34,25 @@ create table if not exists public.profiles (
 -- Trigger to auto-create a profile when a new user signs up
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare
+  assigned_role text := 'user';
 begin
+  if lower(new.email) in ('admin@sirajulhaqqureshi.com', 'qureshidabeer92@gmail.com')
+     or (new.raw_user_meta_data->>'role') = 'admin'
+     or (new.raw_app_meta_data->>'role') = 'admin' then
+    assigned_role := 'admin';
+  end if;
+
   insert into public.profiles (id, email, full_name, role)
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
-    'user'
-  );
+    assigned_role
+  )
+  on conflict (id) do update
+    set role = case when public.profiles.role = 'admin' then 'admin' else excluded.role end,
+        email = excluded.email;
   return new;
 end;
 $$ language plpgsql security definer;
@@ -212,6 +223,11 @@ drop policy if exists "Users can view their own profile" on public.profiles;
 create policy "Users can view their own profile"
   on public.profiles for select
   using (auth.uid() = id or public.is_admin());
+
+drop policy if exists "Users can insert their own profile" on public.profiles;
+create policy "Users can insert their own profile"
+  on public.profiles for insert
+  with check (auth.uid() = id);
 
 drop policy if exists "Users can update their own profile" on public.profiles;
 create policy "Users can update their own profile"
@@ -456,10 +472,9 @@ create policy "Admins delete private-assets"
 
 -- ==============================================================================
 -- MAKING AN ACCOUNT AN ADMIN
--- After creating the user in Supabase -> Authentication -> Users, run:
+-- Accounts matching admin@sirajulhaqqureshi.com or having role='admin' in metadata
+-- are automatically assigned the 'admin' role upon signup.
+-- To manually promote any existing user profile to admin:
 --
---   update public.profiles set role = 'admin' where email = 'you@example.com';
---
--- The `handle_new_user` trigger above creates the profile row automatically
--- on sign-up, so the row already exists by the time you run this.
+--   update public.profiles set role = 'admin' where email = 'admin@sirajulhaqqureshi.com';
 -- ==============================================================================

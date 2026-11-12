@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useLanguage } from '@/context/LanguageContext';
+import { isAuthorizedAdminUser } from '@/lib/auth/admin-check';
 import {
   Shield,
   Mail,
@@ -23,7 +24,42 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('error') === 'unauthorized') {
+        return language === 'ur'
+          ? 'آپ کا اکاؤنٹ ایڈمن کے طور پر مجاز نہیں ہے۔ برائے مہربانی مجاز ایڈمن اکاؤنٹ سے لاگ ان کریں۔'
+          : 'Access denied: your account is not authorized as an administrator.';
+      }
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    if (supabase) {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (cancelled || !session?.user) return;
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (isAuthorizedAdminUser(session.user, profile)) {
+          const params = new URLSearchParams(window.location.search);
+          const redirectUrl = params.get('redirect') || '/admin';
+          router.replace(redirectUrl);
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +77,7 @@ export default function AdminLoginPage() {
       return;
     }
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
@@ -52,17 +88,29 @@ export default function AdminLoginPage() {
       return;
     }
 
-    // Check if the user has admin role via profile
+    const user = authData?.user;
+    if (!user) {
+      setLoading(false);
+      setError(
+        language === 'ur'
+          ? 'صارف کے سیشن کی تصدیق نہیں ہو سکی۔ دوبارہ کوشش کریں۔'
+          : 'Failed to verify user session. Please try again.'
+      );
+      return;
+    }
+
+    // Check if user is authorized as admin (via profile role or metadata/email)
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', (await supabase.auth.getUser()).data.user?.id)
-      .single();
+      .eq('id', user.id)
+      .maybeSingle();
 
-    setLoading(false);
+    const isAuthorized = isAuthorizedAdminUser(user, profile);
 
-    if (profile?.role !== 'admin') {
+    if (!isAuthorized) {
       await supabase.auth.signOut();
+      setLoading(false);
       setError(
         language === 'ur'
           ? 'فقط ایڈمن لاگ ان کر سکتا ہے۔ اس اکاؤنٹ کے پاس ایڈمن کے اختیارات نہیں ہیں۔'
@@ -71,8 +119,40 @@ export default function AdminLoginPage() {
       return;
     }
 
-    router.push('/admin');
-    router.refresh();
+    // Auto-heal / sync the profile in the database so PostgreSQL RLS policies
+    // (such as public.is_admin() and storage bucket policies) recognize the admin.
+    if (isAuthorized && profile?.role !== 'admin') {
+      try {
+        if (profile) {
+          await supabase
+            .from('profiles')
+            .update({
+              role: 'admin',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', user.id);
+        } else {
+          await supabase
+            .from('profiles')
+            .upsert({
+              id: user.id,
+              email: user.email || email.trim(),
+              full_name: user.user_metadata?.full_name || (user.email ? user.email.split('@')[0] : 'Administrator'),
+              role: 'admin',
+              updated_at: new Date().toISOString(),
+            });
+        }
+      } catch (upsertErr) {
+        console.warn('Profile sync notice:', upsertErr);
+      }
+    }
+
+    setLoading(false);
+
+    // Full navigation ensures auth cookies are sent cleanly to middleware and server components
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const redirectUrl = params?.get('redirect') || '/admin';
+    window.location.href = redirectUrl;
   };
 
   return (

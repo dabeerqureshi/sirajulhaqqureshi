@@ -1,5 +1,6 @@
 import { createSessionClient } from '@/lib/supabase/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isAuthorizedAdminUser } from '@/lib/auth/admin-check';
 
 export type AdminSession =
   | { status: 'ok'; client: SupabaseClient }
@@ -39,9 +40,13 @@ export async function getViewerSession(): Promise<ViewerSession> {
     .from('profiles')
     .select('role')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
-  const role = (profile?.role ?? null) as Role;
+  const isRoleAdmin = isAuthorizedAdminUser(user, profile);
+  const role: Role = isRoleAdmin
+    ? 'admin'
+    : ((profile?.role ?? null) as Role);
+
   return { status: 'ok', client: supabase, role };
 }
 
