@@ -4,24 +4,29 @@ import React from 'react';
 import Image from 'next/image';
 import { BookItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import { getStorageUrl } from '@/lib/supabase/storage';
 import { BookOpen, Lock, Calendar, FileText } from 'lucide-react';
 
 interface BookCardProps {
   book: BookItem;
-  onRequestAccess?: (title: string) => void;
+  onRequestAccess?: (title: string, id?: string) => void;
   onReadOnline?: (book: BookItem) => void;
 }
 
 export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCardProps) {
   const { language, t } = useLanguage();
+  const { hasAccessFor } = useAuth();
   const isRestricted = book.visibility === 'restricted';
+  const canAccess = !isRestricted || hasAccessFor('books', book.id);
+
   const coverUrl = getStorageUrl(book.cover_path);
-  const fileUrl = getStorageUrl(book.file_path);
+  // Never expose or resolve file_path directly if unauthorized to prevent DevTools / network inspection leaks
+  const fileUrl = canAccess ? getStorageUrl(book.file_path) : '';
 
   const handleRead = () => {
-    if (isRestricted) {
-      if (onRequestAccess) onRequestAccess(book.title_en);
+    if (!canAccess) {
+      if (onRequestAccess) onRequestAccess(book.title_en, book.id);
     } else if (onReadOnline) {
       onReadOnline({ ...book, file_path: fileUrl });
     }
@@ -52,7 +57,7 @@ export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCa
           </div>
         )}
 
-        {isRestricted && (
+        {!canAccess && (
           <div className="absolute top-3 right-3 bg-rose-900/90 text-white p-1.5 rounded-full shadow-md">
             <Lock className="w-3.5 h-3.5" />
           </div>
@@ -100,9 +105,9 @@ export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCa
             {book.download_count} {language === 'ur' ? 'ڈاؤن لوڈز' : 'downloads'}
           </span>
 
-          {isRestricted ? (
+          {!canAccess ? (
             <button
-              onClick={() => onRequestAccess && onRequestAccess(book.title_en)}
+              onClick={() => onRequestAccess && onRequestAccess(book.title_en, book.id)}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 text-amber-300 hover:bg-stone-800 text-xs font-medium shadow-xs transition-all"
             >
               <Lock className="w-3.5 h-3.5 text-amber-400" />

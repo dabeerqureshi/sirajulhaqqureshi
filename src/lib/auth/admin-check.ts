@@ -34,6 +34,11 @@ export function getAdminEmails(): string[] {
 
 /**
  * Checks if a user is an administrator based on email address or JWT metadata.
+ *
+ * Security Hardening:
+ * Never trusts user_metadata.role because user_metadata is client-writable
+ * during signup in Supabase. Only allows exact email match against the
+ * hardcoded/env allowlist or server-controlled app_metadata.
  */
 export function isUserAdminByMeta(user?: {
   email?: string | null;
@@ -46,11 +51,10 @@ export function isUserAdminByMeta(user?: {
   const email = (user.email || '').trim().toLowerCase();
   const isEmailAdmin = Boolean(email && adminEmails.includes(email));
 
-  const isRoleInMeta =
-    user.app_metadata?.role === 'admin' ||
-    user.user_metadata?.role === 'admin';
+  // Only trust server-side app_metadata. Never trust client-writable user_metadata.
+  const isServerRoleAdmin = user.app_metadata?.role === 'admin';
 
-  return isEmailAdmin || isRoleInMeta;
+  return isEmailAdmin || isServerRoleAdmin;
 }
 
 /**

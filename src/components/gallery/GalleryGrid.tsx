@@ -15,7 +15,7 @@ interface GalleryGridProps {
 
 export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps) {
   const { language, t } = useLanguage();
-  const { hasAccess, hasPendingRequestFor } = useAuth();
+  const { hasAccessFor, hasPendingRequestFor } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [activePhoto, setActivePhoto] = useState<GalleryItem | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -71,10 +71,12 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredItems.map((item) => {
-            const isRestricted = !hasAccess && item.visibility === 'restricted';
+            const canAccess = item.visibility !== 'restricted' || hasAccessFor('gallery', item.id);
+            const isRestricted = !canAccess;
             const isPending = hasPendingRequestFor('gallery', item.id);
-            const resolvedPhotoUrl = getStorageUrl(item.file_path);
-            const isFailed = failedImages[item.id] || !resolvedPhotoUrl;
+            // Never expose private media URLs to unauthorized clients
+            const resolvedPhotoUrl = canAccess ? getStorageUrl(item.file_path) : '';
+            const isFailed = canAccess && (failedImages[item.id] || !resolvedPhotoUrl);
 
             return (
               <div
@@ -91,7 +93,7 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
                   }`}
                 >
                   {/* Ambient backdrop matching image colors for seamless aesthetics */}
-                  {!isFailed && resolvedPhotoUrl && (
+                  {!isRestricted && !isFailed && resolvedPhotoUrl && (
                     <div
                       className="absolute inset-0 bg-cover bg-center filter blur-xl opacity-30 scale-110"
                       style={{ backgroundImage: `url("${encodeURI(resolvedPhotoUrl)}")` }}

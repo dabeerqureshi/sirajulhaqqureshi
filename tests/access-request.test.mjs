@@ -17,6 +17,7 @@ class AccessRequestEngine {
   constructor() {
     this.profiles = new Map(); // id -> { id, email, role: 'admin' | 'approved_user' | 'user' }
     this.requests = new Map(); // id -> { id, user_id, user_email, resource_type, resource_id, status: 'pending'|'approved'|'rejected', admin_notes }
+    this.resourcePermissions = new Map(); // id -> { id, user_id, resource_type, resource_id, access_request_id, expires_at }
     this.auditLogs = [];
   }
 
@@ -28,6 +29,20 @@ class AccessRequestEngine {
     const existingProfile = Array.from(this.profiles.values()).find((p) => p.email === cleanEmail);
     if (existingProfile && (existingProfile.role === 'admin' || existingProfile.role === 'approved_user')) {
       return { status: 400, error: 'You already have approved access to restricted resources.' };
+    }
+
+    if (existingProfile) {
+      const activePerm = Array.from(this.resourcePermissions.values()).find((perm) => {
+        if (perm.user_id !== existingProfile.id) return false;
+        if (perm.expires_at && new Date(perm.expires_at) <= new Date()) return false;
+        if (perm.resource_type === 'all' || perm.resource_type === resource_type) {
+          if (!perm.resource_id || !resource_id || perm.resource_id === resource_id) return true;
+        }
+        return false;
+      });
+      if (activePerm) {
+        return { status: 400, error: 'You already have approved access to restricted resources.' };
+      }
     }
 
     // 2. Check for duplicate pending requests
@@ -63,7 +78,7 @@ class AccessRequestEngine {
     return { status: 200, success: true, requestId: reqId };
   }
 
-  reviewRequest({ callerRole, requestId, action, admin_notes }) {
+  reviewRequest({ callerRole, requestId, action, admin_notes, expires_at }) {
     // 3. Security Rule: Unauthorized person reviews -> Reject operation
     if (callerRole !== 'admin') {
       return { status: 403, error: 'Forbidden: Administrator privileges required.' };
@@ -74,19 +89,30 @@ class AccessRequestEngine {
       return { status: 404, error: 'Access request not found.' };
     }
 
+    let profile = Array.from(this.profiles.values()).find((p) => p.email === request.user_email);
+    if (!profile) {
+      profile = { id: `prof_${Date.now()}`, email: request.user_email, role: 'user' };
+      this.profiles.set(profile.id, profile);
+    }
+
     if (action === 'approve') {
       request.status = 'approved';
       request.admin_notes = admin_notes || null;
-      // Grant permissions: promote role to approved_user
-      let profile = Array.from(this.profiles.values()).find((p) => p.email === request.user_email);
-      if (!profile) {
-        const newProf = { id: `prof_${Date.now()}`, email: request.user_email, role: 'approved_user' };
-        this.profiles.set(newProf.id, newProf);
-      } else {
-        profile.role = 'approved_user';
-      }
+
+      // Grant granular permission in resource_permissions
+      const permId = `perm_${Date.now()}_${Math.random()}`;
+      this.resourcePermissions.set(permId, {
+        id: permId,
+        user_id: profile.id,
+        resource_type: request.resource_type,
+        resource_id: request.resource_id || null,
+        access_request_id: requestId,
+        expires_at: expires_at || null,
+      });
+
+      profile.role = 'approved_user';
       this.auditLogs.push({ action: 'approve', entity_id: requestId });
-      return { status: 200, success: true, statusText: 'approved' };
+      return { status: 200, success: true, statusText: 'approved', permissionId: permId };
     }
 
     if (action === 'reject') {
@@ -100,11 +126,20 @@ class AccessRequestEngine {
     if (action === 'revoke') {
       request.status = 'rejected';
       request.admin_notes = admin_notes || 'Access revoked by administrator';
-      // Remove permissions: demote back to user
-      const profile = Array.from(this.profiles.values()).find((p) => p.email === request.user_email);
-      if (profile && profile.role !== 'admin') {
+
+      // Immediate Revocation: delete matching entries from resource_permissions
+      for (const [pId, p] of this.resourcePermissions.entries()) {
+        if (p.access_request_id === requestId || (p.user_id === profile.id && p.resource_id === request.resource_id)) {
+          this.resourcePermissions.delete(pId);
+        }
+      }
+
+      // If user has no more permissions, demote back to user
+      const remainingUserPerms = Array.from(this.resourcePermissions.values()).filter((p) => p.user_id === profile.id);
+      if (remainingUserPerms.length === 0 && profile.role !== 'admin') {
         profile.role = 'user';
       }
+
       this.auditLogs.push({ action: 'update', revocation: true, entity_id: requestId });
       return { status: 200, success: true, statusText: 'rejected', revoked: true };
     }
@@ -223,11 +258,15 @@ test('Access Request - Business Rule 5 & 6: Admin approval grants access; Revoca
   });
   assert.equal(approveRes.status, 200);
 
-  // Check profile promoted
+  // Check profile promoted & resource_permissions populated
   const approvedProfile = Array.from(engine.profiles.values()).find(
     (p) => p.email === 'historian@archives.org'
   );
   assert.equal(approvedProfile?.role, 'approved_user');
+  assert.equal(engine.resourcePermissions.size, 1);
+  const grantedPerm = Array.from(engine.resourcePermissions.values())[0];
+  assert.equal(grantedPerm.user_id, approvedProfile.id);
+  assert.equal(grantedPerm.resource_type, 'all');
 
   // Admin revokes access
   const revokeRes = engine.reviewRequest({
@@ -238,6 +277,7 @@ test('Access Request - Business Rule 5 & 6: Admin approval grants access; Revoca
   assert.equal(revokeRes.status, 200);
   assert.equal(revokeRes.revoked, true);
 
-  // Check profile demoted back to user
+  // Check profile demoted back to user & resource_permissions immediately deleted
   assert.equal(approvedProfile?.role, 'user');
+  assert.equal(engine.resourcePermissions.size, 0);
 });

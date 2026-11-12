@@ -43,12 +43,23 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+  const customAdminPath = process.env.ADMIN_URL_PATH?.trim();
 
-  // Protect /admin routes (except /admin/login)
-  if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
+  // If a custom obscure admin path is configured, conceal /admin with a 404
+  if (customAdminPath && customAdminPath !== '/admin') {
+    if (pathname.startsWith('/admin')) {
+      return new NextResponse(null, { status: 404 });
+    }
+  }
+
+  const effectiveAdminPath = customAdminPath || '/admin';
+  const effectiveLoginPath = `${effectiveAdminPath}/login`;
+
+  // Protect Admin console routes
+  if (pathname.startsWith(effectiveAdminPath) && pathname !== effectiveLoginPath && pathname !== '/admin/login') {
     if (!user) {
       const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = '/admin/login';
+      loginUrl.pathname = effectiveLoginPath;
       loginUrl.searchParams.set('redirect', pathname);
       return NextResponse.redirect(loginUrl);
     }
@@ -64,7 +75,7 @@ export async function middleware(request: NextRequest) {
 
       if (!isProfileAdmin(profile)) {
         const loginUrl = request.nextUrl.clone();
-        loginUrl.pathname = '/admin/login';
+        loginUrl.pathname = effectiveLoginPath;
         loginUrl.searchParams.set('error', 'unauthorized');
         return NextResponse.redirect(loginUrl);
       }

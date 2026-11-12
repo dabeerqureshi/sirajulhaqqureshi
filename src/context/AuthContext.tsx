@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
-import type { UserRole, ResourceType } from '@/types/database';
+import type { UserRole, ResourceType, ResourcePermission } from '@/types/database';
 import { isUserAdminByMeta } from '@/lib/auth/admin-check';
 
 export interface PendingRequestSummary {
@@ -18,6 +18,8 @@ interface AuthContextType {
   hasAccess: boolean;
   isAdmin: boolean;
   loading: boolean;
+  permissions: ResourcePermission[];
+  hasAccessFor: (resourceType: string, resourceId?: string | null) => boolean;
   pendingRequests: PendingRequestSummary[];
   hasPendingRequestFor: (resourceType: string, resourceId?: string | null) => boolean;
   refreshAuth: () => Promise<void>;
@@ -29,6 +31,8 @@ const AuthContext = createContext<AuthContextType>({
   hasAccess: false,
   isAdmin: false,
   loading: true,
+  permissions: [],
+  hasAccessFor: () => false,
   pendingRequests: [],
   hasPendingRequestFor: () => false,
   refreshAuth: async () => {},
@@ -38,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const [permissions, setPermissions] = useState<ResourcePermission[]>([]);
   const [pendingRequests, setPendingRequests] = useState<PendingRequestSummary[]>([]);
 
   const loadUserData = useCallback(async () => {
@@ -45,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) {
       setUser(null);
       setRole(null);
+      setPermissions([]);
       setPendingRequests([]);
       setLoading(false);
       return;
@@ -56,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!currentUser) {
         setRole(null);
+        setPermissions([]);
         setPendingRequests([]);
         setLoading(false);
         return;
@@ -72,6 +79,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle();
 
         setRole((profile?.role as UserRole) || 'user');
+      }
+
+      // Fetch active resource permissions for current user
+      const { data: perms } = await supabase
+        .from('resource_permissions')
+        .select('*')
+        .eq('user_id', currentUser.id);
+
+      if (perms) {
+        const now = new Date();
+        const activePerms = (perms as ResourcePermission[]).filter(
+          (p) => !p.expires_at || new Date(p.expires_at) > now
+        );
+        setPermissions(activePerms);
+      } else {
+        setPermissions([]);
       }
 
       // Fetch pending requests for current user
@@ -113,13 +136,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [loadUserData]);
 
-  const hasAccess = useMemo(() => {
-    return role === 'admin' || role === 'approved_user';
-  }, [role]);
-
   const isAdmin = useMemo(() => {
     return role === 'admin';
   }, [role]);
+
+  const hasAccess = useMemo(() => {
+    return role === 'admin' || role === 'approved_user' || permissions.length > 0;
+  }, [role, permissions]);
+
+  const hasAccessFor = useCallback(
+    (resourceType: string, resourceId?: string | null) => {
+      if (role === 'admin' || role === 'approved_user') return true;
+      const targetType = resourceType.toLowerCase();
+      const now = new Date();
+      return permissions.some((perm) => {
+        if (perm.expires_at && new Date(perm.expires_at) <= now) return false;
+        if (perm.resource_type === 'all') return true;
+        if (perm.resource_type === targetType) {
+          if (!perm.resource_id || !resourceId || perm.resource_id === resourceId) {
+            return true;
+          }
+        }
+        return false;
+      });
+    },
+    [role, permissions]
+  );
 
   const hasPendingRequestFor = useCallback(
     (resourceType: string, resourceId?: string | null) => {
@@ -143,6 +185,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasAccess,
         isAdmin,
         loading,
+        permissions,
+        hasAccessFor,
         pendingRequests,
         hasPendingRequestFor,
         refreshAuth: loadUserData,

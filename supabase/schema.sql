@@ -162,7 +162,21 @@ create table if not exists public.videos (
 );
 
 -- ==============================================================================
--- 7. AUDIT LOGS TABLE (Administrative Actions & Security Tracking)
+-- 7. RESOURCE PERMISSIONS TABLE (Granular Access Control)
+-- ==============================================================================
+create table if not exists public.resource_permissions (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  resource_type text not null check (resource_type in ('all', 'gallery', 'books', 'poetry', 'video')),
+  resource_id uuid, -- NULL grants access to all resources of resource_type (or all restricted if 'all')
+  granted_by uuid references public.profiles(id) on delete set null,
+  access_request_id uuid references public.access_requests(id) on delete set null,
+  expires_at timestamp with time zone, -- NULL = permanent until revoked
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- ==============================================================================
+-- 8. AUDIT LOGS TABLE (Administrative Actions & Security Tracking)
 -- ==============================================================================
 create table if not exists public.audit_logs (
   id uuid default gen_random_uuid() primary key,
@@ -182,6 +196,8 @@ create index if not exists idx_books_published on public.books (published, creat
 create index if not exists idx_gallery_sort on public.gallery (sort_order asc);
 create index if not exists idx_videos_published_sort on public.videos (published, sort_order asc);
 create index if not exists idx_access_requests_status on public.access_requests (status, requested_at desc);
+create index if not exists idx_resource_perms_user on public.resource_permissions (user_id, resource_type, resource_id);
+create index if not exists idx_resource_perms_expiry on public.resource_permissions (expires_at);
 create index if not exists idx_audit_logs_created on public.audit_logs (created_at desc);
 create index if not exists idx_audit_logs_action on public.audit_logs (action, entity_type);
 
@@ -194,6 +210,7 @@ alter table public.content enable row level security;
 alter table public.books enable row level security;
 alter table public.gallery enable row level security;
 alter table public.access_requests enable row level security;
+alter table public.resource_permissions enable row level security;
 alter table public.audit_logs enable row level security;
 
 -- Helper function to check if current authenticated user is an admin
@@ -207,13 +224,54 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- Helper function to check if user has approved restricted access
+-- Helper function to check if user has approved restricted access (legacy global role)
 create or replace function public.is_approved()
 returns boolean as $$
 begin
   return exists (
     select 1 from public.profiles
     where id = auth.uid() and role in ('admin', 'approved_user')
+  );
+end;
+$$ language plpgsql security definer;
+
+-- Helper function to check granular resource permissions
+create or replace function public.has_resource_permission(
+  p_resource_type text,
+  p_resource_id uuid default null
+)
+returns boolean as $$
+begin
+  -- 1. Admins have access to everything
+  if public.is_admin() then
+    return true;
+  end if;
+
+  -- 2. Check if user is authenticated
+  if auth.uid() is null then
+    return false;
+  end if;
+
+  -- 3. Check legacy approved_user role (global access)
+  if exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'approved_user'
+  ) then
+    return true;
+  end if;
+
+  -- 4. Check active, unexpired row in resource_permissions
+  return exists (
+    select 1 from public.resource_permissions
+    where user_id = auth.uid()
+      and (expires_at is null or expires_at > timezone('utc'::text, now()))
+      and (
+        resource_type = 'all'
+        or (
+          resource_type = p_resource_type
+          and (resource_id is null or p_resource_id is null or resource_id = p_resource_id)
+        )
+      )
   );
 end;
 $$ language plpgsql security definer;
@@ -245,7 +303,8 @@ drop policy if exists "Public can view published content" on public.content;
 create policy "Public can view published content"
   on public.content for select
   using (
-    published = true or
+    (published = true and visibility = 'public') or
+    (published = true and visibility = 'restricted' and public.has_resource_permission('poetry', id)) or
     public.is_admin()
   );
 
@@ -260,7 +319,8 @@ drop policy if exists "Public can view published books" on public.books;
 create policy "Public can view published books"
   on public.books for select
   using (
-    published = true or
+    (published = true and visibility = 'public') or
+    (published = true and visibility = 'restricted' and public.has_resource_permission('books', id)) or
     public.is_admin()
   );
 
@@ -274,7 +334,11 @@ drop policy if exists "Public can view public gallery photos" on public.gallery;
 drop policy if exists "Public can view gallery photos" on public.gallery;
 create policy "Public can view gallery photos"
   on public.gallery for select
-  using (true);
+  using (
+    (visibility = 'public') or
+    (visibility = 'restricted' and public.has_resource_permission('gallery', id)) or
+    public.is_admin()
+  );
 
 drop policy if exists "Admins can do everything on gallery" on public.gallery;
 create policy "Admins can do everything on gallery"
@@ -308,6 +372,20 @@ create policy "Admins can update access requests (approve/reject)"
 drop policy if exists "Admins can delete access requests" on public.access_requests;
 create policy "Admins can delete access requests"
   on public.access_requests for delete
+  using (public.is_admin());
+
+-- RESOURCE PERMISSIONS POLICIES
+drop policy if exists "Users can view their own permissions" on public.resource_permissions;
+create policy "Users can view their own permissions"
+  on public.resource_permissions for select
+  using (
+    (auth.uid() is not null and auth.uid() = user_id)
+    or public.is_admin()
+  );
+
+drop policy if exists "Admins can manage all permissions" on public.resource_permissions;
+create policy "Admins can manage all permissions"
+  on public.resource_permissions for all
   using (public.is_admin());
 
 -- AUDIT LOGS POLICIES
@@ -351,8 +429,7 @@ create policy "Public can view published public videos"
   on public.videos for select
   using (
     (published = true and visibility = 'public') or
-    (published = true and visibility = 'restricted' and public.is_approved()) or
-    (published = true and visibility = 'secret' and public.is_approved()) or
+    (published = true and visibility in ('restricted', 'secret') and public.has_resource_permission('video', id)) or
     public.is_admin()
   );
 
@@ -449,11 +526,21 @@ create policy "Admins delete public-assets"
   on storage.objects for delete
   using (bucket_id = 'public-assets' and public.is_admin());
 
--- Private bucket: only admins and approved users may read; only admins write.
+-- Private bucket: only admins and approved/permitted users may read; only admins write.
 drop policy if exists "Approved read private-assets" on storage.objects;
 create policy "Approved read private-assets"
   on storage.objects for select
-  using (bucket_id = 'private-assets' and public.is_approved());
+  using (
+    bucket_id = 'private-assets' and (
+      public.is_admin() or
+      public.is_approved() or
+      exists (
+        select 1 from public.resource_permissions
+        where user_id = auth.uid()
+          and (expires_at is null or expires_at > timezone('utc'::text, now()))
+      )
+    )
+  );
 
 drop policy if exists "Admins write private-assets" on storage.objects;
 create policy "Admins write private-assets"

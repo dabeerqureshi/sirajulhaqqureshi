@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createSessionClient } from '@/lib/supabase/server';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { RESTRICTED_CACHE_HEADERS } from '@/lib/auth/permissions';
 
 export async function POST(req: Request) {
   try {
@@ -92,8 +93,35 @@ export async function POST(req: Request) {
       if (existingProfile.role === 'admin' || existingProfile.role === 'approved_user') {
         return NextResponse.json(
           { error: 'You already have approved access to restricted resources.' },
-          { status: 400 }
+          { status: 400, headers: RESTRICTED_CACHE_HEADERS }
         );
+      }
+
+      // Check active resource_permissions for this user
+      const nowIso = new Date().toISOString();
+      const { data: activePerms } = await client
+        .from('resource_permissions')
+        .select('id, resource_type, resource_id, expires_at')
+        .eq('user_id', existingProfile.id);
+
+      if (activePerms && activePerms.length > 0) {
+        const hasAccess = activePerms.some((p) => {
+          if (p.expires_at && new Date(p.expires_at) <= new Date(nowIso)) return false;
+          if (p.resource_type === 'all') return true;
+          if (p.resource_type === validResourceType) {
+            if (!p.resource_id || !cleanResourceId || p.resource_id === cleanResourceId) {
+              return true;
+            }
+          }
+          return false;
+        });
+
+        if (hasAccess) {
+          return NextResponse.json(
+            { error: 'You already have approved access to restricted resources.' },
+            { status: 400, headers: RESTRICTED_CACHE_HEADERS }
+          );
+        }
       }
     }
 

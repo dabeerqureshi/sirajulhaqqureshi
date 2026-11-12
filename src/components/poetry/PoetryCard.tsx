@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { ContentItem, PoetryVerse } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import {
   Lock,
   Feather,
@@ -18,7 +19,7 @@ import PdfReaderModal from '@/components/poetry/PdfReaderModal';
 
 interface PoetryCardProps {
   poetry: ContentItem;
-  onRequestAccess?: (title: string) => void;
+  onRequestAccess?: (title: string, id?: string) => void;
 }
 
 /**
@@ -41,12 +42,14 @@ function resolveMediaUrl(path: string | null | undefined): string | null {
 
 export default function PoetryCard({ poetry, onRequestAccess }: PoetryCardProps) {
   const { language } = useLanguage();
+  const { hasAccessFor } = useAuth();
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
-  const isRestricted = poetry.visibility === 'restricted';
-  const mediaPath = poetry.cover_image || poetry.file_path || null;
-  const resolvedUrl = resolveMediaUrl(mediaPath);
+  const canAccess = poetry.visibility !== 'restricted' || hasAccessFor('poetry', poetry.id);
+  const isRestricted = !canAccess;
+  const mediaPath = canAccess ? (poetry.cover_image || poetry.file_path || null) : null;
+  const resolvedUrl = canAccess ? resolveMediaUrl(mediaPath) : null;
 
   const isPdf = Boolean(
     resolvedUrl &&
@@ -139,7 +142,7 @@ export default function PoetryCard({ poetry, onRequestAccess }: PoetryCardProps)
               </p>
               <button
                 type="button"
-                onClick={() => onRequestAccess && onRequestAccess(poetry.title_en || poetry.title_ur)}
+                onClick={() => onRequestAccess && onRequestAccess(poetry.title_en || poetry.title_ur, poetry.id)}
                 className="px-4 py-1.5 bg-amber-800 text-white rounded-lg text-xs font-medium hover:bg-amber-900 transition-colors shadow-xs"
               >
                 {language === 'ur' ? 'رسائی کی درخواست کریں' : 'Request Access'}

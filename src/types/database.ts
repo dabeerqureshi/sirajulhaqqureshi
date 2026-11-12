@@ -105,6 +105,17 @@ export interface AccessRequest {
   reviewed_by?: string | null;
 }
 
+export interface ResourcePermission {
+  id: string;
+  user_id: string;
+  resource_type: ResourceType;
+  resource_id?: string | null;
+  granted_by?: string | null;
+  access_request_id?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+}
+
 export interface VideoItem {
   id: string;
   title_en: string;
