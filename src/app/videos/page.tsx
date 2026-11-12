@@ -5,9 +5,10 @@ import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/footer/Footer';
 import { createClient } from '@/lib/supabase/client';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import AccessRequestModal from '@/components/modals/AccessRequestModal';
 import YouTubeEmbed from '@/components/videos/YouTubeEmbed';
-import { Play, Lock, Video, X, KeyRound, Search, Filter } from 'lucide-react';
+import { Play, Lock, Video, X, KeyRound, Search, Filter, Clock } from 'lucide-react';
 import { decryptFile, fromBase64Url } from '@/lib/crypto';
 import type { VideoItem } from '@/types/database';
 
@@ -22,10 +23,12 @@ function extractYouTubeId(url: string): string | null {
 
 export default function VideosPage() {
   const { language, t } = useLanguage();
+  const { hasAccess, hasPendingRequestFor } = useAuth();
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTitle, setSelectedTitle] = useState('');
+  const [selectedResourceId, setSelectedResourceId] = useState<string | undefined>(undefined);
   const [decryptModal, setDecryptModal] = useState<VideoItem | null>(null);
   const [password, setPassword] = useState('');
   const [decryptError, setDecryptError] = useState('');
@@ -51,8 +54,9 @@ export default function VideosPage() {
     load();
   }, []);
 
-  const handleRequestAccess = (title: string) => {
+  const handleRequestAccess = (title: string, id?: string) => {
     setSelectedTitle(title);
+    setSelectedResourceId(id);
     setModalOpen(true);
   };
 
@@ -68,7 +72,7 @@ export default function VideosPage() {
   const handlePlayVideo = async (item: VideoItem) => {
     const ytId = item.youtube_url ? extractYouTubeId(item.youtube_url) : null;
     const isLocked =
-      item.visibility === 'restricted' ||
+      (!hasAccess && item.visibility === 'restricted') ||
       (item.visibility === 'secret' && item.is_encrypted);
 
     if (ytId && !isLocked) return;
@@ -80,9 +84,9 @@ export default function VideosPage() {
       return;
     }
 
-    if (item.visibility === 'restricted') {
+    if (item.visibility === 'restricted' && !hasAccess) {
       if (!item.is_encrypted) {
-        handleRequestAccess(language === 'ur' ? item.title_ur : item.title_en);
+        handleRequestAccess(language === 'ur' ? item.title_ur : item.title_en, item.id);
         return;
       }
       setPassword('');
@@ -260,8 +264,9 @@ export default function VideosPage() {
                 const description = language === 'ur' ? item.description_ur : item.description_en;
                 const ytId = item.youtube_url ? extractYouTubeId(item.youtube_url) : null;
                 const isLocked =
-                  item.visibility === 'restricted' ||
+                  (!hasAccess && item.visibility === 'restricted') ||
                   (item.visibility === 'secret' && item.is_encrypted);
+                const isPending = hasPendingRequestFor('video', item.id);
 
                 return (
                   <article
@@ -330,14 +335,21 @@ export default function VideosPage() {
                           </span>
                         )}
                         {isLocked && (
-                          <button
-                            type="button"
-                            onClick={() => handlePlayVideo(item)}
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 hover:text-amber-900 transition-colors"
-                          >
-                            <KeyRound className="w-3.5 h-3.5" />
-                            <span>{language === 'ur' ? 'رسائی درخواست' : 'Request Access'}</span>
-                          </button>
+                          isPending ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200/60 shadow-2xs">
+                              <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                              <span>{language === 'ur' ? 'درخواست زیرِ غور' : 'Access Pending'}</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handlePlayVideo(item)}
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 hover:text-amber-900 transition-colors cursor-pointer"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                              <span>{language === 'ur' ? 'رسائی درخواست' : 'Request Access'}</span>
+                            </button>
+                          )
                         )}
                       </div>
                     </div>
@@ -418,6 +430,7 @@ export default function VideosPage() {
         onClose={() => setModalOpen(false)}
         resourceTitle={selectedTitle}
         resourceType="Video"
+        resourceId={selectedResourceId}
       />
     </div>
   );

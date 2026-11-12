@@ -20,6 +20,7 @@ export default function PoetryPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTitle, setSelectedTitle] = useState('');
+  const [selectedPoetryId, setSelectedPoetryId] = useState<string | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState('');
   // 'verses' = classic poetry cards, 'hamd' = uploaded Hamd PDF reader section.
   const [section, setSection] = useState<'verses' | 'hamd'>('verses');
@@ -76,8 +77,9 @@ export default function PoetryPage() {
     loadPoetry();
   }, [loadPoetry]);
 
-  const handleRequestAccess = (title: string) => {
+  const handleRequestAccess = (title: string, id?: string) => {
     setSelectedTitle(title);
+    setSelectedPoetryId(id);
     setModalOpen(true);
   };
 
@@ -250,6 +252,7 @@ export default function PoetryPage() {
         onClose={() => setModalOpen(false)}
         resourceTitle={selectedTitle}
         resourceType="Poem / Ghazal"
+        resourceId={selectedPoetryId}
       />
     </div>
   );

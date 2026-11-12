@@ -17,6 +17,7 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPhotoTitle, setSelectedPhotoTitle] = useState('');
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const loadGallery = async () => {
@@ -43,8 +44,9 @@ export default function GalleryPage() {
     loadGallery();
   }, []);
 
-  const handleRequestAccess = (title: string) => {
+  const handleRequestAccess = (title: string, id?: string) => {
     setSelectedPhotoTitle(title);
+    setSelectedPhotoId(id);
     setModalOpen(true);
   };
 
@@ -93,6 +95,7 @@ export default function GalleryPage() {
         onClose={() => setModalOpen(false)}
         resourceTitle={selectedPhotoTitle}
         resourceType="Archival Photograph"
+        resourceId={selectedPhotoId}
       />
     </div>
   );

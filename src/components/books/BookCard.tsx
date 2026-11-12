@@ -4,25 +4,28 @@ import React from 'react';
 import Image from 'next/image';
 import { BookItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import { getStorageUrl } from '@/lib/supabase/storage';
-import { BookOpen, Download, Lock, Calendar, FileText, Eye } from 'lucide-react';
+import { BookOpen, Download, Lock, Calendar, FileText, Eye, Clock } from 'lucide-react';
 
 interface BookCardProps {
   book: BookItem;
-  onRequestAccess?: (title: string) => void;
+  onRequestAccess?: (title: string, id?: string) => void;
   onReadOnline?: (book: BookItem) => void;
 }
 
 export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCardProps) {
   const { language, t } = useLanguage();
-  const isRestricted = book.visibility === 'restricted';
+  const { hasAccess, hasPendingRequestFor } = useAuth();
+  const isRestricted = !hasAccess && book.visibility === 'restricted';
+  const isPending = hasPendingRequestFor('books', book.id);
   const coverUrl = getStorageUrl(book.cover_path);
   const fileUrl = getStorageUrl(book.file_path);
 
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault();
     if (isRestricted) {
-      if (onRequestAccess) onRequestAccess(book.title_en);
+      if (onRequestAccess) onRequestAccess(book.title_en, book.id);
     } else if (fileUrl) {
       const link = document.createElement('a');
       link.href = fileUrl;
@@ -34,7 +37,7 @@ export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCa
 
   const handleRead = () => {
     if (isRestricted) {
-      if (onRequestAccess) onRequestAccess(book.title_en);
+      if (onRequestAccess) onRequestAccess(book.title_en, book.id);
     } else if (onReadOnline) {
       onReadOnline({ ...book, file_path: fileUrl });
     }
@@ -111,13 +114,20 @@ export default function BookCard({ book, onRequestAccess, onReadOnline }: BookCa
           </span>
 
           {isRestricted ? (
-            <button
-              onClick={() => onRequestAccess && onRequestAccess(book.title_en)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 text-amber-300 hover:bg-stone-800 text-xs font-medium shadow-xs transition-all"
-            >
-              <Lock className="w-3.5 h-3.5 text-amber-400" />
-              <span>{t('requestAccess')}</span>
-            </button>
+            isPending ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium shadow-2xs">
+                <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                <span>{language === 'ur' ? 'درخواست زیرِ غور' : 'Access Pending'}</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => onRequestAccess && onRequestAccess(book.title_en, book.id)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-900 text-amber-300 hover:bg-stone-800 text-xs font-medium shadow-xs transition-all cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                <span>{t('requestAccess')}</span>
+              </button>
+            )
           ) : (
             <div className="flex items-center gap-2">
               <button

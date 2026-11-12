@@ -223,37 +223,47 @@ export default function AdminPage() {
   // ==========================================
   // ACCESS REQUESTS
   // ==========================================
-  const handleUpdateRequest = async (id: string, newStatus: 'approved' | 'rejected', userId?: string) => {
-    const supabase = createClient();
-    if (!supabase) return;
-
+  const handleReviewRequest = async (id: string, action: 'approve' | 'reject' | 'revoke', notes?: string) => {
     try {
-      const { error } = await supabase
-        .from('access_requests')
-        .update({
-          status: newStatus,
-          reviewed_at: new Date().toISOString()
-        })
-        .eq('id', id);
+      const res = await fetch(`/api/admin/access-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, admin_notes: notes }),
+      });
 
-      if (error) throw error;
-
-      // If approved, update user's profile role to 'approved_user'
-      if (newStatus === 'approved' && userId) {
-        await supabase
-          .from('profiles')
-          .update({ role: 'approved_user', updated_at: new Date().toISOString() })
-          .eq('id', userId);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to ${action} request`);
       }
 
       setRequests((prev) =>
-        prev.map((req) => (req.id === id ? { ...req, status: newStatus } : req))
+        prev.map((req) =>
+          req.id === id
+            ? {
+                ...req,
+                status: action === 'approve' ? 'approved' : 'rejected',
+                admin_notes: notes || req.admin_notes,
+              }
+            : req
+        )
       );
-      showToast(`Access request marked as ${newStatus.toUpperCase()}`);
-      await recordAuditLog(newStatus === 'approved' ? 'approve' : 'reject', 'access_request', id, { userId });
+
+      const msg =
+        action === 'approve'
+          ? 'Access request approved & permission granted.'
+          : action === 'revoke'
+          ? 'Access revoked & permission removed.'
+          : 'Access request rejected.';
+
+      showToast(msg);
+      loadAllData();
     } catch (err) {
       showToast(`Error updating request: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
+  };
+
+  const handleUpdateRequest = async (id: string, newStatus: 'approved' | 'rejected', _userId?: string) => {
+    await handleReviewRequest(id, newStatus === 'approved' ? 'approve' : 'reject');
   };
 
   const handleDeleteRequest = async (id: string) => {
@@ -1640,30 +1650,54 @@ export default function AdminPage() {
                               {req.status === 'pending' ? (
                                 <div className="inline-flex items-center gap-2">
                                   <button
-                                    onClick={() => handleUpdateRequest(req.id, 'approved', req.user_id)}
-                                    className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-xs"
+                                    onClick={() => handleReviewRequest(req.id, 'approve')}
+                                    className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-xs cursor-pointer"
                                   >
                                     Approve
                                   </button>
                                   <button
-                                    onClick={() => handleUpdateRequest(req.id, 'rejected')}
-                                    className="px-3 py-1.5 rounded-lg bg-stone-200 hover:bg-rose-100 hover:text-rose-800 text-stone-700 text-xs font-medium"
+                                    onClick={() => {
+                                      const reason = prompt('Optional rejection reason / notes:') || undefined;
+                                      handleReviewRequest(req.id, 'reject', reason);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg bg-stone-200 hover:bg-rose-100 hover:text-rose-800 text-stone-700 text-xs font-medium cursor-pointer"
                                   >
                                     Reject
+                                  </button>
+                                </div>
+                              ) : req.status === 'approved' ? (
+                                <div className="inline-flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Revoke approved access for ${req.user_name || req.user_email}? This will remove their permissions.`)) {
+                                        handleReviewRequest(req.id, 'revoke');
+                                      }
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-300 text-rose-700 hover:bg-rose-100 text-xs font-semibold transition-colors cursor-pointer"
+                                    title="Revoke permissions"
+                                  >
+                                    Revoke Access
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteRequest(req.id)}
+                                    className="text-stone-400 hover:text-rose-600 p-1 cursor-pointer"
+                                    title="Delete Request Record"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
                               ) : (
                                 <div className="inline-flex items-center gap-2">
                                   <button
-                                    onClick={() => handleUpdateRequest(req.id, req.status === 'approved' ? 'rejected' : 'approved', req.user_id)}
-                                    className="text-xs text-stone-500 hover:text-stone-800 underline font-medium"
+                                    onClick={() => handleReviewRequest(req.id, 'approve')}
+                                    className="text-xs text-emerald-700 hover:text-emerald-900 underline font-semibold cursor-pointer"
                                   >
-                                    Switch to {req.status === 'approved' ? 'Rejected' : 'Approved'}
+                                    Re-approve
                                   </button>
                                   <button
                                     onClick={() => handleDeleteRequest(req.id)}
-                                    className="text-stone-400 hover:text-rose-600 p-1"
-                                    title="Delete Request"
+                                    className="text-stone-400 hover:text-rose-600 p-1 cursor-pointer"
+                                    title="Delete Request Record"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>

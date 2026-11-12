@@ -3,6 +3,7 @@
 import React from 'react';
 import { ContentItem, PoetryVerse } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import { getStorageUrl } from '@/lib/supabase/storage';
 import {
   Lock,
@@ -10,18 +11,21 @@ import {
   Sparkles,
   FileText,
   Calendar,
+  Clock,
 } from 'lucide-react';
 import InlinePoetryReader from '@/components/poetry/InlinePoetryReader';
 
 interface PoetryCardProps {
   poetry: ContentItem;
-  onRequestAccess?: (title: string) => void;
+  onRequestAccess?: (title: string, id?: string) => void;
 }
 
 export default function PoetryCard({ poetry, onRequestAccess }: PoetryCardProps) {
   const { language } = useLanguage();
+  const { hasAccess, hasPendingRequestFor } = useAuth();
 
-  const isRestricted = poetry.visibility === 'restricted';
+  const isRestricted = !hasAccess && poetry.visibility === 'restricted';
+  const isPending = hasPendingRequestFor('poetry', poetry.id);
   const mediaPath = poetry.cover_image || poetry.file_path || null;
   const resolvedUrl = mediaPath ? getStorageUrl(mediaPath) : null;
 
@@ -114,13 +118,20 @@ export default function PoetryCard({ poetry, onRequestAccess }: PoetryCardProps)
                   ? 'یہ کلام نجی ذخیرے میں محفوظ ہے۔ مطالعہ کے لیے رسائی درکار ہے۔'
                   : 'This poem is reserved in the private collection. Request access to read.'}
               </p>
-              <button
-                type="button"
-                onClick={() => onRequestAccess && onRequestAccess(poetry.title_en || poetry.title_ur)}
-                className="px-4 py-1.5 bg-amber-800 text-white rounded-lg text-xs font-medium hover:bg-amber-900 transition-colors shadow-xs"
-              >
-                {language === 'ur' ? 'رسائی کی درخواست کریں' : 'Request Access'}
-              </button>
+              {isPending ? (
+                <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium">
+                  <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                  <span>{language === 'ur' ? 'درخواست زیرِ غور' : 'Access Pending'}</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onRequestAccess && onRequestAccess(poetry.title_en || poetry.title_ur, poetry.id)}
+                  className="px-4 py-1.5 bg-amber-800 text-white rounded-lg text-xs font-medium hover:bg-amber-900 transition-colors shadow-xs cursor-pointer"
+                >
+                  {language === 'ur' ? 'رسائی کی درخواست کریں' : 'Request Access'}
+                </button>
+              )}
             </div>
             <div className="filter blur-sm select-none opacity-40 space-y-4">
               <p className="font-urdu text-lg">رازِ نہاں جو سینے میں موجزن رہا</p>

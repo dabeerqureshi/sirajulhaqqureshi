@@ -4,16 +4,18 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { GalleryItem } from '@/types/database';
 import { useLanguage } from '@/context/LanguageContext';
+import { useAuth } from '@/context/AuthContext';
 import { getStorageUrl } from '@/lib/supabase/storage';
-import { Lock, Eye, Calendar, Filter, X, Image as ImageIcon, RotateCcw } from 'lucide-react';
+import { Lock, Eye, Calendar, Filter, X, Image as ImageIcon, RotateCcw, Clock } from 'lucide-react';
 
 interface GalleryGridProps {
   items: GalleryItem[];
-  onRequestAccess: (title: string) => void;
+  onRequestAccess: (title: string, id?: string) => void;
 }
 
 export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps) {
   const { language, t } = useLanguage();
+  const { hasAccess, hasPendingRequestFor } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [activePhoto, setActivePhoto] = useState<GalleryItem | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -69,7 +71,8 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredItems.map((item) => {
-            const isRestricted = item.visibility === 'restricted';
+            const isRestricted = !hasAccess && item.visibility === 'restricted';
+            const isPending = hasPendingRequestFor('gallery', item.id);
             const resolvedPhotoUrl = getStorageUrl(item.file_path);
             const isFailed = failedImages[item.id] || !resolvedPhotoUrl;
 
@@ -148,13 +151,20 @@ export default function GalleryGrid({ items, onRequestAccess }: GalleryGridProps
                       <p className={`text-xs text-stone-300 mb-4 ${language === 'ur' ? 'font-urdu' : ''}`}>
                         {language === 'ur' ? 'خاندانی اور تاریخی ذخیرہ' : 'Authorized researchers & family only'}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => onRequestAccess(item.title_en || item.title_ur)}
-                        className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium shadow-md transition-colors"
-                      >
-                        {t('requestAccess')}
-                      </button>
+                      {isPending ? (
+                        <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-200 text-xs font-medium">
+                          <Clock className="w-3.5 h-3.5 animate-pulse" />
+                          <span>{language === 'ur' ? 'درخواست زیرِ غور' : 'Access Pending'}</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onRequestAccess(item.title_en || item.title_ur, item.id)}
+                          className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium shadow-md transition-colors cursor-pointer"
+                        >
+                          {t('requestAccess')}
+                        </button>
+                      )}
                     </div>
                   ) : !isFailed ? (
                     <div className="absolute inset-0 z-20 bg-gradient-to-t from-stone-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4 pointer-events-none">

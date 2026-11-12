@@ -53,112 +53,200 @@ export async function POST(req: Request) {
       ? String(resource_type).toLowerCase()
       : 'all';
 
+    const cleanResourceId =
+      typeof resource_id === 'string' && resource_id.trim() ? resource_id.trim() : null;
+
+    // UUID regex check if resource_id provided
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (cleanResourceId && !uuidRegex.test(cleanResourceId)) {
+      return NextResponse.json(
+        { error: 'Invalid resource ID format.' },
+        { status: 400 }
+      );
+    }
+
     let userId: string | null = null;
 
-    const insertPayload: {
-      user_id: string | null;
-      user_name: string;
-      user_email: string;
-      resource_type: string;
-      resource_id: string | null;
-      reason: string;
-      status: 'pending';
-      requested_at: string;
-    } = {
-      user_id: null,
+    // Use admin client if available, else fallback to session client
+    const adminSupabase = createAdminClient();
+    const sessionClient = await createSessionClient();
+    const client = adminSupabase || sessionClient;
+
+    if (!client) {
+      return NextResponse.json(
+        { error: 'Database service is temporarily unavailable. Please try again later.' },
+        { status: 503 }
+      );
+    }
+
+    // 1. BUSINESS RULE: Check if user already has access
+    // Look up profile by email to verify if already approved or admin
+    const { data: existingProfile } = await client
+      .from('profiles')
+      .select('id, role')
+      .eq('email', cleanEmail)
+      .maybeSingle();
+
+    if (existingProfile) {
+      userId = existingProfile.id;
+      if (existingProfile.role === 'admin' || existingProfile.role === 'approved_user') {
+        return NextResponse.json(
+          { error: 'You already have approved access to restricted resources.' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 2. BUSINESS RULE: Check for duplicate pending requests
+    // Prevent duplicate submission if a request is already PENDING for this user & resource
+    const pendingQuery = client
+      .from('access_requests')
+      .select('id, resource_type, resource_id')
+      .eq('user_email', cleanEmail)
+      .eq('status', 'pending');
+
+    const { data: existingPendingRequests } = await pendingQuery;
+
+    if (existingPendingRequests && existingPendingRequests.length > 0) {
+      const isDuplicate = existingPendingRequests.some((p) => {
+        // If they already requested 'all', everything is covered
+        if (p.resource_type === 'all') return true;
+        // If this request is for 'all' and they have a pending request
+        if (validResourceType === 'all') return true;
+        // Same resource type match
+        if (p.resource_type === validResourceType) {
+          // If specific resource_id matches or either request covers the entire category
+          if (!cleanResourceId || !p.resource_id) return true;
+          return p.resource_id === cleanResourceId;
+        }
+        return false;
+      });
+
+      if (isDuplicate) {
+        return NextResponse.json(
+          { error: 'A request for this resource is already pending review by an administrator.' },
+          { status: 409 }
+        );
+      }
+    }
+
+    // 3. BUSINESS RULE: Validate requested resource existence if resource_id provided
+    if (cleanResourceId) {
+      let resourceFound = false;
+      if (validResourceType === 'video') {
+        const { data } = await client.from('videos').select('id').eq('id', cleanResourceId).maybeSingle();
+        resourceFound = Boolean(data);
+      } else if (validResourceType === 'books') {
+        const { data } = await client.from('books').select('id').eq('id', cleanResourceId).maybeSingle();
+        resourceFound = Boolean(data);
+      } else if (validResourceType === 'gallery') {
+        const { data } = await client.from('gallery').select('id').eq('id', cleanResourceId).maybeSingle();
+        resourceFound = Boolean(data);
+      } else if (validResourceType === 'poetry') {
+        const { data } = await client.from('content').select('id').eq('id', cleanResourceId).eq('type', 'poetry').maybeSingle();
+        resourceFound = Boolean(data);
+      }
+
+      if (!resourceFound) {
+        return NextResponse.json(
+          { error: 'The requested resource could not be found.' },
+          { status: 404 }
+        );
+      }
+    }
+
+    // 4. Provision user account if admin client is available and user doesn't exist
+    if (!userId && adminSupabase) {
+      try {
+        const { data: existingUsers } = await adminSupabase.auth.admin.listUsers();
+        const existing = existingUsers?.users?.find(
+          (u) => u.email?.toLowerCase() === cleanEmail
+        );
+
+        if (existing) {
+          userId = existing.id;
+        } else {
+          const { data: newUser, error: createError } =
+            await adminSupabase.auth.admin.createUser({
+              email: cleanEmail,
+              email_confirm: true,
+              user_metadata: { full_name: cleanName },
+            });
+
+          if (!createError && newUser?.user) {
+            userId = newUser.user.id;
+          }
+        }
+      } catch (provisionErr) {
+        console.warn('Could not provision auth user during request:', provisionErr);
+      }
+    }
+
+    // If still no userId, check if current session matches
+    if (!userId && sessionClient) {
+      try {
+        const { data: { user } } = await sessionClient.auth.getUser();
+        if (user && user.email?.toLowerCase() === cleanEmail) {
+          userId = user.id;
+        }
+      } catch {
+        // guest
+      }
+    }
+
+    const insertPayload = {
+      user_id: userId,
       user_name: cleanName,
       user_email: cleanEmail,
       resource_type: validResourceType,
-      resource_id: typeof resource_id === 'string' ? resource_id : null,
+      resource_id: cleanResourceId,
       reason: reason.trim(),
-      status: 'pending',
+      status: 'pending' as const,
       requested_at: new Date().toISOString(),
     };
 
-    // Attempt admin user provisioning if service role is configured
-    try {
-      const adminSupabase = createAdminClient();
+    // 5. Insert access request
+    const insertClient = adminSupabase || sessionClient;
+    const { data: inserted, error: insertError } = await insertClient
+      .from('access_requests')
+      .insert([insertPayload])
+      .select('id')
+      .single();
 
-      // 1. Check if user already exists
-      const { data: existingUsers } = await adminSupabase.auth.admin.listUsers();
-      const existing = existingUsers?.users?.find(
-        (u) => u.email?.toLowerCase() === cleanEmail
-      );
-
-      if (existing) {
-        userId = existing.id;
-      } else {
-        // 2. Create the user profile account
-        const { data: newUser, error: createError } =
-          await adminSupabase.auth.admin.createUser({
-            email: cleanEmail,
-            email_confirm: true,
-            user_metadata: { full_name: cleanName },
-          });
-
-        if (!createError && newUser?.user) {
-          userId = newUser.user.id;
-        }
-      }
-
-      if (!userId) {
-        const { data: profile } = await adminSupabase
-          .from('profiles')
-          .select('id')
-          .eq('email', cleanEmail)
-          .maybeSingle();
-
-        if (profile) userId = profile.id;
-      }
-
-      insertPayload.user_id = userId;
-
-      // 3. Insert access request via admin client (omit .select() so PostgreSQL
-      // does not evaluate SELECT RLS policies on the returned row)
-      const { error } = await adminSupabase
+    if (insertError) {
+      // If select failed due to RLS, try plain insert
+      const { error: plainInsertError } = await insertClient
         .from('access_requests')
         .insert([insertPayload]);
 
-      if (error) {
-        throw error;
+      if (plainInsertError) {
+        throw plainInsertError;
       }
-
-      return NextResponse.json({ success: true });
-    } catch (adminErr) {
-      // If service role key is not configured or failed, fall back to session client
-      console.warn('Admin client unavailable for access request provisioning:', adminErr);
-
-      const sessionClient = await createSessionClient();
-      if (!sessionClient) {
-        return NextResponse.json(
-          { error: 'Database service is temporarily unavailable. Please try again later.' },
-          { status: 503 }
-        );
-      }
-
-      // If user is currently signed in, link their auth user id
-      if (!insertPayload.user_id) {
-        try {
-          const { data: { user } } = await sessionClient.auth.getUser();
-          if (user) {
-            insertPayload.user_id = user.id;
-          }
-        } catch {
-          // guest user without session
-        }
-      }
-
-      // Omit .select() so PostgreSQL does not trigger SELECT RLS on the returning row
-      const { error } = await sessionClient
-        .from('access_requests')
-        .insert([insertPayload]);
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-
-      return NextResponse.json({ success: true });
     }
+
+    // Record audit log entry for the new access request
+    try {
+      await insertClient.from('audit_logs').insert([
+        {
+          action: 'create',
+          entity_type: 'access_request',
+          entity_id: inserted?.id || null,
+          metadata: {
+            user_email: cleanEmail,
+            resource_type: validResourceType,
+            resource_id: cleanResourceId,
+          },
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } catch (auditErr) {
+      console.warn('Could not record access request audit log:', auditErr);
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Access request submitted successfully.',
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Server error occurred' },

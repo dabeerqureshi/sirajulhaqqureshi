@@ -17,6 +17,7 @@ export default function BooksPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedBookTitle, setSelectedBookTitle] = useState('');
+  const [selectedBookId, setSelectedBookId] = useState<string | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeReadingBook, setActiveReadingBook] = useState<BookItem | null>(null);
 
@@ -41,8 +42,9 @@ export default function BooksPage() {
     loadBooks();
   }, []);
 
-  const handleRequestAccess = (title: string) => {
+  const handleRequestAccess = (title: string, id?: string) => {
     setSelectedBookTitle(title);
+    setSelectedBookId(id);
     setModalOpen(true);
   };
 
@@ -139,6 +141,7 @@ export default function BooksPage() {
         onClose={() => setModalOpen(false)}
         resourceTitle={selectedBookTitle}
         resourceType="Book / Publication"
+        resourceId={selectedBookId}
       />
 
       <BookReaderModal
