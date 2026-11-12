@@ -206,8 +206,7 @@ export async function POST(req: Request) {
     };
 
     // 5. Insert access request
-    const insertClient = adminSupabase || sessionClient;
-    const { data: inserted, error: insertError } = await insertClient
+    const { data: inserted, error: insertError } = await client
       .from('access_requests')
       .insert([insertPayload])
       .select('id')
@@ -215,7 +214,7 @@ export async function POST(req: Request) {
 
     if (insertError) {
       // If select failed due to RLS, try plain insert
-      const { error: plainInsertError } = await insertClient
+      const { error: plainInsertError } = await client
         .from('access_requests')
         .insert([insertPayload]);
 
@@ -226,7 +225,7 @@ export async function POST(req: Request) {
 
     // Record audit log entry for the new access request
     try {
-      await insertClient.from('audit_logs').insert([
+      await client.from('audit_logs').insert([
         {
           action: 'create',
           entity_type: 'access_request',

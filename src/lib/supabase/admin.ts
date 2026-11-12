@@ -1,27 +1,37 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Server-side Supabase admin client using the service role key.
- * NEVER expose this file to the browser. Only import it in server components
- * or API routes (Next.js route handlers / server actions).
- *
- * The service role key bypasses Row Level Security (RLS). It must be kept secret
- * and used only by trusted admin operations (upload, delete, approve/reject).
+ * Checks whether the server environment contains a genuine service-role key
+ * rather than an unconfigured placeholder.
  */
-export function createAdminClient() {
-  const supabaseUrl = process.env.SUPABASE_SERVICE_ROLE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
-  // Newer Supabase projects issue SUPABASE_SECRET_KEY (sb_secret_...);
-  // older ones issue SUPABASE_SERVICE_ROLE_KEY. Both are server-only secrets.
+export function isServiceRoleConfigured(): boolean {
   const serviceRoleKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_SECRET_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      'Missing SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) or NEXT_PUBLIC_SUPABASE_URL. '
-      + 'Set them in .env.local / Vercel environment variables (server-side only).'
-    );
+  if (!serviceRoleKey) return false;
+  const k = serviceRoleKey.trim().toLowerCase();
+  if (k.startsWith('placeholder') || k.startsWith('your-') || k.length < 20) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Server-side Supabase admin client using the service role key.
+ * Returns null if the service role key is not configured or is a placeholder.
+ * NEVER expose this file to the browser.
+ */
+export function createAdminClient(): SupabaseClient | null {
+  const supabaseUrl =
+    process.env.SUPABASE_SERVICE_ROLE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey || !isServiceRoleConfigured()) {
+    return null;
   }
 
   return createClient(supabaseUrl, serviceRoleKey, {
